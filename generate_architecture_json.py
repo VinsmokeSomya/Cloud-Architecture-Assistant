@@ -141,10 +141,15 @@ def save_architecture_json(project_title, architecture_json):
     
     return file_path
 
-def generate_architecture_json(architecture_prompt, template_json):
+def generate_architecture_json(architecture_prompt, security_assessment, template_json):
     """Generate architecture JSON based on prompt and template"""
+    # Combine architecture prompt with security assessment if available
+    full_prompt = architecture_prompt
+    if security_assessment:
+        full_prompt += f"\n\nSecurity Requirements:\n{security_assessment}"
+
     context = f"""Based on the following AWS architecture requirements:
-{architecture_prompt}
+{full_prompt}
 
 Considering these requirements, please generate an AWS architecture in JSON format, structured similarly to this example:
 {json.dumps(template_json, indent=2)}
@@ -181,6 +186,17 @@ def main():
             print_error(f"Error reading prompt file: {str(e)}")
             return
         
+        # Read security assessment (optional)
+        security_assessment = None
+        security_file = input("\nEnter the path to the security assessment file (press Enter to skip): ").strip()
+        if security_file:
+            try:
+                with open(security_file, 'r', encoding='utf-8') as f:
+                    security_assessment = f.read()
+            except Exception as e:
+                print_error(f"Error reading security assessment file: {str(e)}")
+                print_info("Continuing without security assessment...")
+        
         # Read template JSON
         template_file = "templet_arch.json"
         try:
@@ -192,7 +208,7 @@ def main():
         
         # Generate architecture JSON
         print_info("\nGenerating architecture JSON...")
-        architecture_json = generate_architecture_json(architecture_prompt, template_json)
+        architecture_json = generate_architecture_json(architecture_prompt, security_assessment, template_json)
         
         if architecture_json:
             # Save the generated JSON
