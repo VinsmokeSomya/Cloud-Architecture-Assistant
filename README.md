@@ -8,6 +8,7 @@ An intelligent assistant that helps design AWS cloud architectures through natur
 - Support for multiple AI models (OpenAI, Google Gemini, Mistral)
 - Automatic fallback between different AI providers
 - Generates detailed AWS architecture specifications
+- Generates structured AWS architecture JSON diagrams
 - Saves conversation history and architecture prompts
 - Colored console output for better readability
 
@@ -41,18 +42,35 @@ MISTRAL_API_KEY=your_mistral_api_key
 
 ## Usage
 
-1. Run the main script:
+### 1. Generate Architecture Design
+
+Run the main script to start the interactive conversation:
 ```bash
 python main.py
 ```
 
-2. Follow the interactive prompts to provide project details
-3. The assistant will ask relevant questions about your project requirements
-4. After gathering all information, it will generate a detailed AWS architecture specification
+Follow the interactive prompts to provide project details. The assistant will:
+- Ask relevant questions about your project requirements
+- Generate a detailed AWS architecture specification
+- Save the conversation and architecture details
+
+### 2. Generate Architecture JSON
+
+After generating the architecture design, you can create a structured JSON representation:
+```bash
+python generate_architecture_json.py
+```
+
+This will:
+- Take your architecture prompt
+- Generate a detailed AWS architecture JSON following the template structure
+- Save the JSON in your project's folder
 
 ## Project Structure
 
-- `main.py`: Main application script
+- `main.py`: Main application script for interactive architecture design
+- `generate_architecture_json.py`: Script for generating architecture JSON
+- `templet_arch.json`: Template for architecture JSON structure
 - `API Test/`: Directory containing API test scripts
   - `openai-api-test.py`: Test script for OpenAI API
   - `gemini-api-test.py`: Test script for Google Gemini API
@@ -61,9 +79,12 @@ python main.py
 
 ## Output Files
 
-The assistant generates two types of files:
+The assistant generates several types of files:
 1. `[ProjectName]_Communication_[Timestamp].txt`: Contains the full conversation history
 2. `[ProjectName]_Architecture_[Timestamp].txt`: Contains the generated AWS architecture specification
+3. `[ProjectName]_Architecture_[Timestamp].json`: Contains the structured AWS architecture diagram
+
+All files are organized in project-specific folders for better organization.
 
 ## Contributing
 

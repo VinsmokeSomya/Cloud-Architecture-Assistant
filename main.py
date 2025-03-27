@@ -87,15 +87,24 @@ elif is_valid_api_key(MISTRAL_API_KEY):
 
 def save_file(project_title, content, file_type):
     """Save content to a file with project title and timestamp"""
-    # Create a filename from the project title (remove special characters)
+    # Create a safe project title for folder name (remove special characters)
     safe_title = "".join(c for c in project_title if c.isalnum() or c in (' ', '-', '_')).strip()
+    
+    # Create project folder if it doesn't exist
+    project_folder = os.path.join(os.getcwd(), safe_title)
+    if not os.path.exists(project_folder):
+        os.makedirs(project_folder)
+    
+    # Create a filename with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{safe_title}_{file_type}_{timestamp}.txt"
     
-    with open(filename, "w", encoding='utf-8') as f:
+    # Save file in the project folder
+    file_path = os.path.join(project_folder, filename)
+    with open(file_path, "w", encoding='utf-8') as f:
         f.write(content)
     
-    return filename
+    return file_path
 
 def generate_with_openai(prompt, system_message):
     """Generate response using OpenAI API"""
@@ -253,68 +262,30 @@ def get_ai_response(prompt, system_message):
         print_error(f"Error getting AI response: {str(e)}")
         raise
 
-def generate_cost_estimate(architecture_prompt: str) -> Dict:
-    """Generate cost estimate for the proposed architecture"""
-    context = f"""Based on the following AWS architecture, provide a detailed cost estimate:
+def generate_security_assessment(architecture_prompt: str) -> Dict:
+    """Generate security assessment for the proposed architecture"""
+    context = f"""Based on the following AWS architecture, provide a detailed security assessment:
 {architecture_prompt}
 
 Generate a JSON response with the following structure:
 {{
-    "monthly_estimate": {{
-        "total_cost": float,
-        "breakdown": {{
-            "compute": float,
-            "storage": float,
-            "network": float,
-            "other": float
-        }},
-        "cost_optimization_suggestions": [string]
-    }},
-    "annual_estimate": {{
-        "total_cost": float,
-        "potential_savings": float,
-        "savings_strategies": [string]
+    "security_score": float,
+    "risk_level": string,
+    "vulnerabilities": [string],
+    "recommendations": [string],
+    "compliance": {{
+        "standards": [string],
+        "gaps": [string],
+        "remediation_steps": [string]
     }}
 }}"""
 
-    system_message = """You are an AWS cost optimization expert. Provide detailed cost estimates and optimization suggestions.
-Include specific AWS service costs and potential savings strategies."""
-
-    try:
-        response = get_ai_response(context, system_message)
-        # Extract JSON from response
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        return None
-    except Exception as e:
-        print_error(f"Error generating cost estimate: {str(e)}")
-        return None
-
-def generate_security_assessment(architecture_prompt: str) -> Dict:
-    """Generate security assessment for the proposed architecture"""
-    context = f"""Based on the following AWS architecture, provide a security assessment:
-{architecture_prompt}
-
-Generate a JSON response with the following structure:
-{{
-    "security_score": int,
-    "vulnerabilities": [string],
-    "recommendations": [string],
-    "compliance_status": {{
-        "hipaa": bool,
-        "pci": bool,
-        "gdpr": bool,
-        "iso27001": bool
-    }},
-    "security_best_practices": [string]
-}}"""
-
-    system_message = """You are an AWS security expert. Provide comprehensive security assessment and recommendations.
+    system_message = """You are an AWS security expert. Provide detailed security assessment and recommendations.
 Focus on AWS security best practices and compliance requirements."""
 
     try:
         response = get_ai_response(context, system_message)
+        # Extract JSON from response
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
         if json_match:
             return json.loads(json_match.group())
@@ -439,141 +410,78 @@ def determine_question_count(project_details):
         return 30  # Highly complex project
 
 def main():
+    """Main function to run the cloud architecture assistant"""
     try:
-        # Check for valid API keys
-        if not any([openai_client, is_valid_api_key(GEMINI_API_KEY), is_valid_api_key(MISTRAL_API_KEY)]):
-            print_error("Error: No valid API keys found. Please add at least one valid API key to your .env file.")
-            return
-
-        # Show which AI model is active at startup
-        active_model = get_active_model()
-        if active_model:
-            print_info(f"Using {active_model} for intelligent responses.")
-
         # Get initial project details
         project_details, conversation = get_project_details()
         
-        # Determine number of questions based on project complexity
-        total_questions = determine_question_count(project_details)
-        print_info(f"\nBased on your project description, I'll ask you {total_questions} questions to ensure we cover all requirements.")
-        time.sleep(1)  # Brief pause for readability
+        # Create project folder
+        safe_title = "".join(c for c in project_details['title'] if c.isalnum() or c in (' ', '-', '_')).strip()
+        project_folder = os.path.join(os.getcwd(), safe_title)
+        if not os.path.exists(project_folder):
+            os.makedirs(project_folder)
+            print_success(f"\nCreated project folder: {project_folder}")
         
         # Initialize lists for questions and answers
         questions = []
         answers = []
         
-        # Get questions and answers one by one
-        for i in range(total_questions):
-            conversation.append(print_header("\n" + "="*50))
-            conversation.append(print_info(f"Question {i+1} of {total_questions}"))
-            conversation.append(print_header("="*50))
-            
-            # Get next question with a brief pause
-            print_info("\nAnalyzing previous responses...")
-            time.sleep(0.5)  # Brief pause for natural flow
-            question = get_next_question(project_details, questions, answers)
-            questions.append(question)
-            print_question(question)
-            conversation.append(question)
+        # Get project requirements through conversation
+        while True:
+            # Generate next question
+            next_question = get_next_question(project_details, questions, answers)
+            if not next_question:
+                break
+                
+            # Add question to list
+            questions.append(next_question)
+            conversation.append(print_question(next_question))
             
             # Get user response
-            answer = get_user_response(question)
-            if answer is None:  # User wants to exit
-                return
-            if answer == "RESTART":  # User wants to start over
-                main()
-                return
-            answers.append(answer)
-            conversation.append(f"\nYour answer: {answer}")
-        
-        # Analyze and display understanding of requirements
-        print_info("\nAnalyzing your requirements...")
-        time.sleep(1)
-        understanding = analyze_requirements(project_details, questions, answers)
-        
-        # Display understanding and get user confirmation
-        print_header("\n=== My Understanding of Your Requirements ===")
-        print_info(understanding)
-        
-        # Ask for user confirmation
-        while True:
-            confirmation = input("\nIs this understanding correct? (yes/no): ").strip().lower()
-            if confirmation in ['yes', 'no']:
+            user_response = get_user_response(next_question)
+            if user_response == "RESTART":
+                return main()
+            if not user_response:
                 break
-            print_error("Please answer with 'yes' or 'no'")
+                
+            # Add answer to list
+            answers.append(user_response)
+            conversation.append(f"\nYour answer: {user_response}")
+            
+            # Ask if user wants to continue
+            if input("\nWould you like to provide more details? (yes/no): ").lower() != 'yes':
+                break
         
-        if confirmation == 'no':
-            print_info("Would you like to:")
-            print_info("1. Start over")
-            print_info("2. Modify specific answers")
-            choice = input("\nEnter your choice (1 or 2): ").strip()
-            if choice == '1':
-                main()
-                return
-            elif choice == '2':
-                # Modify specific answers
-                answers = modify_answers(questions, answers)
-                # Re-analyze requirements with modified answers
-                print_info("\nRe-analyzing your requirements with modified answers...")
-                time.sleep(1)
-                understanding = analyze_requirements(project_details, questions, answers)
-                
-                # Display new understanding and get confirmation
-                print_header("\n=== My Updated Understanding of Your Requirements ===")
-                print_info(understanding)
-                
-                # Ask for confirmation again
-                while True:
-                    confirmation = input("\nIs this understanding correct now? (yes/no): ").strip().lower()
-                    if confirmation in ['yes', 'no']:
-                        break
-                    print_error("Please answer with 'yes' or 'no'")
-                
-                if confirmation == 'no':
-                    print_error("Since the understanding is still not correct, we'll start over.")
-                    main()
-                    return
-            else:
-                print_error("Invalid choice. Exiting program.")
-                return
-        
-        # Generate final architecture prompt
-        print_info("\nGenerating architecture prompt based on confirmed requirements...")
-        time.sleep(1)
+        # Generate architecture prompt
         architecture_prompt = generate_architecture_prompt(project_details, questions, answers)
-        
-        # Generate cost estimate
-        print_info("\nGenerating cost estimate...")
-        time.sleep(1)
-        cost_estimate = generate_cost_estimate(architecture_prompt)
+        if not architecture_prompt:
+            print_error("Failed to generate architecture prompt")
+            return
         
         # Generate security assessment
-        print_info("\nPerforming security assessment...")
-        time.sleep(1)
         security_assessment = generate_security_assessment(architecture_prompt)
         
-        # Save all results
-        architecture_filename = save_analysis_results(project_details['title'], architecture_prompt, cost_estimate, security_assessment)
+        # Save conversation history
+        conversation_text = "\n".join(conversation)
+        conversation_file = save_file(project_details['title'], conversation_text, "Communication")
+        print_success(f"\nConversation saved to: {conversation_file}")
         
-        # Save conversation
-        conversation_filename = save_file(project_details['title'], "\n".join(conversation), "Conversation")
+        # Save architecture prompt
+        architecture_file = save_file(project_details['title'], architecture_prompt, "Architecture")
+        print_success(f"Architecture prompt saved to: {architecture_file}")
         
-        # Final success messages
-        print_success("\nGreat! I've generated a comprehensive analysis of your cloud architecture.")
-        print_info(f"The complete conversation has been saved to '{conversation_filename}'")
-        print_info(f"The architecture has been saved to '{architecture_filename}'")
-        
-        if cost_estimate:
-            print_info(f"Monthly estimated cost: ${cost_estimate['monthly_estimate']['total_cost']:.2f}")
-            print_info("Check the cost estimate file for detailed breakdown and optimization suggestions.")
-        
+        # Save security assessment if available
         if security_assessment:
-            print_info(f"Security score: {security_assessment['security_score']}/100")
-            print_info("Check the security assessment file for detailed recommendations.")
+            security_text = json.dumps(security_assessment, indent=2)
+            security_file = save_file(project_details['title'], security_text, "Security")
+            print_success(f"Security assessment saved to: {security_file}")
+        
+        print_success("\nThank you for using the Cloud Architecture Assistant!")
+        print_info("Your architecture design and assessment have been saved to files.")
         
     except Exception as e:
         print_error(f"An error occurred: {str(e)}")
-        print_info("Please try running the program again.")
+        print_info("Please try again or contact support if the issue persists.")
 
 if __name__ == "__main__":
-    main()  # Run the main function
+    main()
