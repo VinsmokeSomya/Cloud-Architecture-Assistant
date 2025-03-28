@@ -87,15 +87,25 @@ elif is_valid_api_key(MISTRAL_API_KEY):
 
 def save_file(project_title, content, file_type):
     """Save content to a file with project title and timestamp"""
-    # Create a filename from the project title (remove special characters)
+    # Create a safe folder name from the project title (remove special characters)
     safe_title = "".join(c for c in project_title if c.isalnum() or c in (' ', '-', '_')).strip()
+    
+    # Create project folder if it doesn't exist
+    project_folder = safe_title
+    if not os.path.exists(project_folder):
+        os.makedirs(project_folder)
+    
+    # Create filename with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{safe_title}_{file_type}_{timestamp}.txt"
     
-    with open(filename, "w", encoding='utf-8') as f:
+    # Full path including project folder
+    filepath = os.path.join(project_folder, filename)
+    
+    with open(filepath, "w", encoding='utf-8') as f:
         f.write(content)
     
-    return filename
+    return filepath  # Return the full filepath
 
 def generate_with_openai(prompt, system_message):
     """Generate response using OpenAI API"""
@@ -512,8 +522,9 @@ def main():
         
         # Final success messages
         print_success("\nGreat! I've generated a comprehensive analysis of your cloud architecture.")
-        print_info(f"The complete conversation has been saved to '{conversation_filename}'")
-        print_info(f"The architecture has been saved to '{architecture_filename}'")
+        print_info(f"All files have been saved in the '{project_details['title']}' folder:")
+        print_info(f"- Conversation: {os.path.basename(conversation_filename)}")
+        print_info(f"- Architecture: {os.path.basename(architecture_filename)}")
         
         if security_assessment:
             print_info(f"Security score: {security_assessment['security_score']}/100")
