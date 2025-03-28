@@ -3,4 +3,5 @@ python-dotenv>=1.0.0
 google-generativeai>=0.3.2
 mistralai>=0.0.10
 colorama>=0.4.6
-json5>=0.9.14  # For better JSON handling 
+json5>=0.9.14  # For better JSON handling
+gradio>=4.19.2  # For web interface 

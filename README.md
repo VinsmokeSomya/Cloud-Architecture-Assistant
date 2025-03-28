@@ -9,6 +9,7 @@ An intelligent assistant that helps design AWS cloud architectures through natur
 - Automatic fallback between different AI providers
 - Generates detailed AWS architecture specifications
 - Generates structured AWS architecture JSON diagrams
+- Interactive web interface for easy access
 - Saves conversation history and architecture prompts
 - Colored console output for better readability
 
@@ -42,9 +43,23 @@ MISTRAL_API_KEY=your_mistral_api_key
 
 ## Usage
 
-### 1. Generate Architecture Design
+### 1. Web Interface (Recommended)
 
-Run the main script to start the interactive conversation:
+Run the web interface:
+```bash
+python app.py
+```
+
+This will launch a web interface with three tabs:
+- **Architecture Design**: Start a new architecture design project
+- **Architecture JSON**: Generate JSON from an existing architecture prompt
+- **API Status**: Check the status of your API connections
+
+### 2. Command Line Interface
+
+Alternatively, you can use the command line interface:
+
+#### Generate Architecture Design
 ```bash
 python main.py
 ```
@@ -54,9 +69,7 @@ Follow the interactive prompts to provide project details. The assistant will:
 - Generate a detailed AWS architecture specification
 - Save the conversation and architecture details
 
-### 2. Generate Architecture JSON
-
-After generating the architecture design, you can create a structured JSON representation:
+#### Generate Architecture JSON
 ```bash
 python generate_architecture_json.py
 ```
@@ -68,6 +81,7 @@ This will:
 
 ## Project Structure
 
+- `app.py`: Web interface using Gradio
 - `main.py`: Main application script for interactive architecture design
 - `generate_architecture_json.py`: Script for generating architecture JSON
 - `templet_arch.json`: Template for architecture JSON structure
