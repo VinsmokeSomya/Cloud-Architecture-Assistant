@@ -9,6 +9,15 @@ from mistralai.models.chat_completion import ChatMessage
 from dotenv import load_dotenv
 from datetime import datetime
 import time
+from main import (
+    get_project_details, get_next_question, get_user_response,
+    generate_architecture_prompt, generate_security_assessment,
+    save_file, save_analysis_results, determine_question_count,
+    print_colored, print_header, print_info, print_error, print_success
+)
+from generate_architecture_json import (
+    generate_architecture_json, save_architecture_json
+)
 
 # Load environment variables
 load_dotenv()
@@ -51,7 +60,7 @@ def initialize_api_clients():
     if is_valid_api_key(GEMINI_API_KEY):
         try:
             genai.configure(api_key=GEMINI_API_KEY)
-            gemini_model = genai.GenerativeModel('models/gemini-2.0-pro-exp')  # Using more stable model
+            gemini_model = genai.GenerativeModel('models/gemini-2.0-pro-exp')
             active_api = "gemini"
             return "✅ Gemini API initialized successfully"
         except Exception as e:
@@ -267,13 +276,9 @@ def save_file(project_title, content, file_type):
 
 def determine_question_count(project_details):
     """Determine the number of questions based on project complexity"""
-    # Analyze project description for complexity indicators
     description = project_details['description'].lower()
-    
-    # Count complexity indicators
     complexity_score = 0
     
-    # Technical complexity indicators
     tech_indicators = [
         'microservices', 'distributed', 'real-time', 'machine learning', 'ai', 'iot',
         'big data', 'analytics', 'streaming', 'container', 'kubernetes', 'serverless',
@@ -287,23 +292,21 @@ def determine_question_count(project_details):
         if indicator in description:
             complexity_score += 1
     
-    # Determine question count based on complexity score
     if complexity_score <= 5:
-        return 10  # Basic project
+        return 10
     elif complexity_score <= 10:
-        return 15  # Moderate complexity
+        return 15
     elif complexity_score <= 15:
-        return 20  # Complex project
+        return 20
     elif complexity_score <= 20:
-        return 25  # Very complex project
+        return 25
     else:
-        return 30  # Highly complex project
+        return 30
 
 def start_conversation(project_title, project_description):
     """Start a new conversation"""
     global conversation_history, questions, answers, current_project
     
-    # Reset conversation state
     conversation_history = []
     questions = []
     answers = []
@@ -312,15 +315,13 @@ def start_conversation(project_title, project_description):
         "description": project_description
     }
     
-    # Determine total questions based on project complexity
     total_questions = determine_question_count(current_project)
     
-    # Get first question
     next_question = get_next_question(current_project, questions, answers)
     if next_question:
         conversation_history.append(f"Assistant: {next_question}")
         questions.append(next_question)
-        return "\n".join(conversation_history), next_question, f"Question 1/{total_questions}"
+        return "\n\n".join(conversation_history), next_question, f"Question 1/{total_questions}"
     return "Failed to start conversation", "", f"Question 0/{total_questions}"
 
 def continue_conversation(user_response):
@@ -330,11 +331,14 @@ def continue_conversation(user_response):
     if not current_project:
         return "No active conversation. Please start a new conversation.", ""
     
-    # Add user's response
+    # Add user response
     conversation_history.append(f"User: {user_response}")
     answers.append(user_response)
     
-    # Get next question
+    # Add blank line after user response
+    conversation_history.append("")
+    
+    # Get and add next question
     next_question = get_next_question(current_project, questions, answers)
     if next_question:
         conversation_history.append(f"Assistant: {next_question}")
@@ -350,23 +354,26 @@ def finish_conversation():
         return "No active conversation. Please start a new conversation.", ""
     
     try:
-        # Generate architecture prompt
         architecture_prompt = generate_architecture_prompt(current_project, questions, answers)
         if not architecture_prompt:
             return "Failed to generate architecture prompt", ""
         
-        # Generate security assessment
         security_assessment = generate_security_assessment(architecture_prompt)
         
-        # Save all results
-        conversation_text = "\n".join(conversation_history)
+        # Format conversation with proper spacing
+        formatted_conversation = []
+        for i, line in enumerate(conversation_history):
+            formatted_conversation.append(line)
+            if i < len(conversation_history) - 1 and line.startswith("User:"):
+                formatted_conversation.append("")  # Add blank line after user responses
+        
+        conversation_text = "\n".join(formatted_conversation)
         save_file(current_project["title"], conversation_text, "Communication")
         save_file(current_project["title"], architecture_prompt, "Architecture")
         
         if security_assessment:
             save_file(current_project["title"], json.dumps(security_assessment, indent=2), "Security")
         
-        # Reset conversation state
         conversation_history = []
         questions = []
         answers = []
@@ -380,7 +387,6 @@ def finish_conversation():
 def generate_architecture_json(architecture_prompt, project_title, template_file=None):
     """Generate architecture JSON from prompt"""
     try:
-        # Use provided template file or default to templet_arch.json
         template_path = template_file if template_file else "templet_arch.json"
         
         try:
@@ -391,11 +397,9 @@ def generate_architecture_json(architecture_prompt, project_title, template_file
         except json.JSONDecodeError:
             return "Invalid JSON template file", ""
         
-        # Generate architecture JSON
         architecture_json = generate_architecture_json_from_prompt(architecture_prompt, template_json)
         
         if architecture_json:
-            # Save the JSON
             json_file = save_file(project_title, json.dumps(architecture_json, indent=4), "Architecture")
             return f"Architecture JSON saved to: {json_file}", json.dumps(architecture_json, indent=2)
         else:
@@ -403,6 +407,39 @@ def generate_architecture_json(architecture_prompt, project_title, template_file
             
     except Exception as e:
         return f"An error occurred: {str(e)}", ""
+
+def analyze_requirements(project_details, questions, answers):
+    """Analyze and display understanding of project requirements"""
+    context = f"""Project Title: {project_details['title']}
+Description: {project_details['description']}
+
+Full Requirements Discussion:
+{chr(10).join(f"Q: {q}\nA: {a}\n" for q, a in zip(questions, answers))}
+
+Based on the provided information, analyze and summarize your understanding of the project requirements.
+Focus on:
+1. Project Scope and Purpose
+2. Key Technical Requirements
+3. Business Constraints
+4. Performance Expectations
+5. Security Needs
+6. Scalability Requirements
+7. Budget Considerations
+8. Integration Points
+9. Disaster Recovery Needs
+10. Monitoring Preferences
+
+Present your understanding in a clear, structured format."""
+
+    system_message = """You are an experienced cloud architecture engineer analyzing project requirements.
+Provide a clear, structured summary of your understanding of the project needs and constraints."""
+
+    return get_ai_response(context, system_message)
+
+def modify_answers(questions, answers):
+    """Allow user to modify specific answers"""
+    modified_answers = answers.copy()
+    return modified_answers
 
 def create_ui():
     """Create the Gradio UI"""
@@ -463,6 +500,31 @@ def create_ui():
                         interactive=False
                     )
             
+            # Requirements Analysis Section
+            with gr.Row():
+                with gr.Column(scale=1):
+                    with gr.Accordion("Requirements Understanding", open=False):
+                        requirements_understanding = gr.Textbox(
+                            label="Analysis",
+                            lines=10,
+                            interactive=False
+                        )
+                        with gr.Row():
+                            confirm_btn = gr.Button("Confirm Understanding", variant="primary")
+                            modify_btn = gr.Button("Modify Answers", variant="secondary")
+                            restart_btn = gr.Button("Start Over", variant="secondary")
+            
+            # Security Assessment Section
+            with gr.Row():
+                with gr.Column(scale=1):
+                    with gr.Accordion("Security Assessment", open=False):
+                        security_assessment = gr.Textbox(
+                            label="Assessment",
+                            lines=10,
+                            interactive=False,
+                            show_copy_button=True
+                        )
+            
             # Bottom section: Status and Generated Architecture
             with gr.Row():
                 with gr.Column(scale=1):
@@ -487,8 +549,59 @@ def create_ui():
                     return f"Question {len(questions)}/{total}"
                 return "Question 0/10"
             
-            def clear_response(response, history, question):
-                return "", history, question
+            def analyze_and_show_requirements():
+                if not current_project or not questions or not answers:
+                    return "Please complete the conversation first.", ""
+                understanding = analyze_requirements(current_project, questions, answers)
+                return understanding, ""
+            
+            def handle_confirmation(understanding):
+                if understanding == "Please complete the conversation first.":
+                    return understanding, "", "Please complete the conversation first.", ""
+                
+                # Generate security assessment
+                try:
+                    sec_assessment = generate_security_assessment(understanding)
+                    sec_assessment_text = json.dumps(sec_assessment, indent=2) if sec_assessment else "Security assessment failed."
+                except Exception as e:
+                    sec_assessment_text = f"Error generating security assessment: {str(e)}"
+                
+                return understanding, sec_assessment_text, "Understanding confirmed. You can now generate the architecture.", ""
+            
+            def handle_modification():
+                global answers, current_project, questions
+                if not current_project or not questions or not answers:
+                    return "Please complete the conversation first.", ""
+                answers = modify_answers(questions, answers)
+                return analyze_requirements(current_project, questions, answers), ""
+            
+            def handle_restart():
+                global conversation_history, questions, answers, current_project
+                conversation_history = []
+                questions = []
+                answers = []
+                current_project = None
+                return "", "", "", "", "", ""
+            
+            def save_all_results(architecture_prompt, security_assessment):
+                if not current_project:
+                    return "No active project. Please start a new conversation."
+                
+                try:
+                    # Save conversation
+                    conversation_text = "\n".join(conversation_history)
+                    save_file(current_project["title"], conversation_text, "Conversation")
+                    
+                    # Save architecture
+                    save_file(current_project["title"], architecture_prompt, "Architecture")
+                    
+                    # Save security assessment
+                    if security_assessment:
+                        save_file(current_project["title"], security_assessment, "SecurityAssessment")
+                    
+                    return "All files saved successfully!"
+                except Exception as e:
+                    return f"Error saving files: {str(e)}"
             
             start_btn.click(
                 fn=start_conversation,
@@ -511,9 +624,31 @@ def create_ui():
             )
             
             finish_btn.click(
-                fn=finish_conversation,
+                fn=analyze_and_show_requirements,
                 inputs=[],
-                outputs=[status, architecture_output]
+                outputs=[requirements_understanding, security_assessment]
+            )
+            
+            confirm_btn.click(
+                fn=handle_confirmation,
+                inputs=[requirements_understanding],
+                outputs=[requirements_understanding, security_assessment, status, architecture_output]
+            ).then(
+                fn=save_all_results,
+                inputs=[architecture_output, security_assessment],
+                outputs=[status]
+            )
+            
+            modify_btn.click(
+                fn=handle_modification,
+                inputs=[],
+                outputs=[requirements_understanding, security_assessment]
+            )
+            
+            restart_btn.click(
+                fn=handle_restart,
+                inputs=[],
+                outputs=[conversation_history, current_question, question_counter, requirements_understanding, security_assessment, status, architecture_output]
             )
         
         with gr.Tab("Architecture JSON"):
@@ -553,10 +688,23 @@ def create_ui():
                     return None
                 return template_file.name
             
+            def save_json_result(json_output, project_title):
+                if not json_output:
+                    return "No JSON to save."
+                try:
+                    file_path = save_file(project_title, json_output, "ArchitectureJSON")
+                    return f"JSON saved to: {file_path}"
+                except Exception as e:
+                    return f"Error saving JSON: {str(e)}"
+            
             generate_json_btn.click(
                 fn=lambda p, t, f: generate_architecture_json(p, t, process_template(f)),
                 inputs=[architecture_prompt, json_project_title, template_file],
                 outputs=[json_status, json_output]
+            ).then(
+                fn=save_json_result,
+                inputs=[json_output, json_project_title],
+                outputs=[json_status]
             )
     
     return demo
