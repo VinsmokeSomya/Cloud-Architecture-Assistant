@@ -15,7 +15,7 @@ for model in available_models:
     print(model.name)
 
 # Initialize the model
-model = genai.GenerativeModel('models/gemini-1.5-pro-latest')
+model = genai.GenerativeModel('models/gemini-2.0-pro-exp')
 
 # Test the API with a simple prompt
 print("\nTesting API with a simple prompt:")

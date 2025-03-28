@@ -59,7 +59,7 @@ if is_valid_api_key(OPENAI_API_KEY):
 elif is_valid_api_key(GEMINI_API_KEY):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
+        gemini_model = genai.GenerativeModel('models/gemini-2.0-pro-exp')
         active_api = "gemini"
     except Exception as e:
         print_error(f"Error initializing Gemini: {str(e)}")
@@ -97,7 +97,7 @@ def generate_with_mistral(prompt, system_message):
     ]
     try:
         response = mistral_client.chat(
-            model="mistral-tiny",
+            model="mistral-large-latest",
             messages=messages
         )
         return response.choices[0].message.content
@@ -109,11 +109,28 @@ def get_ai_response(prompt, system_message):
     """Get response from the active AI model"""
     try:
         if active_api == "openai" and openai_client:
-            return generate_with_openai(prompt, system_message)
+            response = openai_client.chat.completions.create(
+                model="gpt-4o-2024-11-20",
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content
         elif active_api == "gemini" and gemini_model:
-            return generate_with_gemini(prompt, system_message)
+            full_prompt = f"{system_message}\n\n{prompt}"
+            response = gemini_model.generate_content(full_prompt)
+            return response.text
         elif active_api == "mistral" and mistral_client:
-            return generate_with_mistral(prompt, system_message)
+            messages = [
+                ChatMessage(role="system", content=system_message),
+                ChatMessage(role="user", content=prompt)
+            ]
+            response = mistral_client.chat(
+                model="mistral-large-latest",
+                messages=messages
+            )
+            return response.choices[0].message.content
         else:
             raise Exception("No valid API clients available. Please check your API keys and try again.")
     except Exception as e:

@@ -132,7 +132,7 @@ def generate_with_mistral(prompt, system_message):
     ]
     try:
         response = mistral_client.chat(
-            model="mistral-tiny",
+            model="mistral-large-latest",
             messages=messages
         )
         return response.choices[0].message.content
@@ -147,7 +147,7 @@ def get_active_model():
     elif active_api == "gemini":
         return "Google Gemini"
     elif active_api == "mistral":
-        return "Mistral AI (Mixtral-8x7B)"
+        return "Mistral AI"
     return None
 
 def get_project_details():
@@ -249,18 +249,43 @@ Use single line breaks between paragraphs for better formatting."""
     return get_ai_response(context, system_message)
 
 def get_ai_response(prompt, system_message):
-    """Get response from the active AI model"""
-    try:
-        if active_api == "openai" and openai_client:
-            return generate_with_openai(prompt, system_message)
-        elif active_api == "gemini" and gemini_model:
-            return generate_with_gemini(prompt, system_message)
-        elif active_api == "mistral" and mistral_client:
-            return generate_with_mistral(prompt, system_message)
-        else:
-            raise Exception("No valid API clients available. Please check your API keys and try again.")
-    except Exception as e:
-        print_error(f"Error getting AI response: {str(e)}")
+    """Get response from the active AI model with fallback mechanisms"""
+    global active_api
+    
+    def try_api_call():
+        try:
+            if active_api == "openai" and openai_client:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o-2024-11-20",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                return response.choices[0].message.content, None
+            elif active_api == "gemini" and gemini_model:
+                full_prompt = f"{system_message}\n\n{prompt}"
+                response = gemini_model.generate_content(full_prompt)
+                return response.text, None
+            elif active_api == "mistral" and mistral_client:
+                messages = [
+                    ChatMessage(role="system", content=system_message),
+                    ChatMessage(role="user", content=prompt)
+                ]
+                response = mistral_client.chat(
+                    model="mistral-large-latest",
+                    messages=messages
+                )
+                return response.choices[0].message.content, None
+            return None, "No valid API clients available"
+        except Exception as e:
+            return None, str(e)
+
+    response, error = try_api_call()
+    if response:
+        return response
+    else:
+        print_error(f"Error getting AI response: {error}")
         raise
 
 def generate_security_assessment(architecture_prompt: str) -> Dict:
