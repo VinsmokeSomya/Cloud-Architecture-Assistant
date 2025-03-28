@@ -72,7 +72,7 @@ if is_valid_api_key(OPENAI_API_KEY):
 elif is_valid_api_key(GEMINI_API_KEY):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
+        gemini_model = genai.GenerativeModel('models/gemini-2.0-pro-exp')
         active_api = "gemini"
     except Exception as e:
         print_error(f"Error initializing Gemini: {str(e)}")

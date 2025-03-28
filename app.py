@@ -34,36 +34,59 @@ def initialize_api_clients():
     """Initialize API clients based on available keys"""
     global active_api, openai_client, gemini_model, mistral_client
     
+    status_messages = []
+    
+    # Try OpenAI first
     if is_valid_api_key(OPENAI_API_KEY):
         try:
             openai_client = OpenAI(api_key=OPENAI_API_KEY)
             active_api = "openai"
-            return "OpenAI API initialized successfully"
+            return "✅ OpenAI API initialized successfully"
         except Exception as e:
-            return f"Error initializing OpenAI: {str(e)}"
+            status_messages.append(f"❌ OpenAI API Error: {str(e)}")
+    else:
+        status_messages.append("❌ OpenAI API: No valid API key found")
     
-    elif is_valid_api_key(GEMINI_API_KEY):
+    # Try Gemini next
+    if is_valid_api_key(GEMINI_API_KEY):
         try:
             genai.configure(api_key=GEMINI_API_KEY)
-            gemini_model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
+            gemini_model = genai.GenerativeModel('models/gemini-2.0-pro-exp')  # Using more stable model
             active_api = "gemini"
-            return "Gemini API initialized successfully"
+            return "✅ Gemini API initialized successfully"
         except Exception as e:
-            return f"Error initializing Gemini: {str(e)}"
+            status_messages.append(f"❌ Gemini API Error: {str(e)}")
+    else:
+        status_messages.append("❌ Gemini API: No valid API key found")
     
-    elif is_valid_api_key(MISTRAL_API_KEY):
+    # Try Mistral last
+    if is_valid_api_key(MISTRAL_API_KEY):
         try:
             mistral_client = MistralClient(api_key=MISTRAL_API_KEY)
             active_api = "mistral"
-            return "Mistral API initialized successfully"
+            return "✅ Mistral API initialized successfully"
         except Exception as e:
-            return f"Error initializing Mistral: {str(e)}"
+            status_messages.append(f"❌ Mistral API Error: {str(e)}")
+    else:
+        status_messages.append("❌ Mistral API: No valid API key found")
     
-    return "No valid API keys found. Please check your .env file."
+    return "\n".join([
+        "❌ No APIs available. Please configure at least one API key in the .env file:",
+        "1. Get an API key from OpenAI, Google Gemini, or Mistral",
+        "2. Add it to the .env file",
+        "3. Click 'Retry API Connection'",
+        "",
+        "Status:",
+        *status_messages
+    ])
 
 def is_valid_api_key(api_key):
     """Check if the API key is valid"""
-    return api_key and api_key != "your_openai_api_key_here" and api_key != "your_gemini_api_key_here" and api_key != "your_mistral_api_key_here"
+    if not api_key:
+        return False
+    if api_key in ["your_openai_api_key_here", "your_gemini_api_key_here", "your_mistral_api_key_here"]:
+        return False
+    return True
 
 def get_ai_response(prompt, system_message):
     """Get response from the active AI model with fallback mechanisms"""
