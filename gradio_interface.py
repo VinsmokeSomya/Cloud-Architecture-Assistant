@@ -43,41 +43,47 @@ def initialize_api_clients():
     """Initialize API clients based on available keys"""
     global active_api, openai_client, gemini_model, mistral_client
     
+    available_models = []
     status_messages = []
     
-    # Try OpenAI first
+    # Try OpenAI
     if is_valid_api_key(OPENAI_API_KEY):
         try:
             openai_client = OpenAI(api_key=OPENAI_API_KEY)
-            active_api = "openai"
-            return "✅ OpenAI API initialized successfully"
+            available_models.append("openai")
+            status_messages.append("✅ OpenAI API initialized successfully")
         except Exception as e:
             status_messages.append(f"❌ OpenAI API Error: {str(e)}")
     else:
         status_messages.append("❌ OpenAI API: No valid API key found")
     
-    # Try Gemini next
+    # Try Gemini
     if is_valid_api_key(GEMINI_API_KEY):
         try:
             genai.configure(api_key=GEMINI_API_KEY)
             gemini_model = genai.GenerativeModel('models/gemini-2.0-pro-exp')
-            active_api = "gemini"
-            return "✅ Gemini API initialized successfully"
+            available_models.append("gemini")
+            status_messages.append("✅ Gemini API initialized successfully")
         except Exception as e:
             status_messages.append(f"❌ Gemini API Error: {str(e)}")
     else:
         status_messages.append("❌ Gemini API: No valid API key found")
     
-    # Try Mistral last
+    # Try Mistral
     if is_valid_api_key(MISTRAL_API_KEY):
         try:
             mistral_client = MistralClient(api_key=MISTRAL_API_KEY)
-            active_api = "mistral"
-            return "✅ Mistral API initialized successfully"
+            available_models.append("mistral")
+            status_messages.append("✅ Mistral API initialized successfully")
         except Exception as e:
             status_messages.append(f"❌ Mistral API Error: {str(e)}")
     else:
         status_messages.append("❌ Mistral API: No valid API key found")
+    
+    if available_models:
+        global active_api
+        active_api = available_models[0]  # Set first available model as default
+        return "\n".join(status_messages), available_models
     
     return "\n".join([
         "❌ No APIs available. Please configure at least one API key in the .env file:",
@@ -87,7 +93,7 @@ def initialize_api_clients():
         "",
         "Status:",
         *status_messages
-    ])
+    ]), []
 
 def is_valid_api_key(api_key):
     """Check if the API key is valid"""
@@ -441,24 +447,92 @@ def modify_answers(questions, answers):
     modified_answers = answers.copy()
     return modified_answers
 
+def switch_model(model_name):
+    """Switch the active AI model"""
+    global active_api
+    if model_name in ["openai", "gemini", "mistral"]:
+        active_api = model_name
+        model_names = {
+            "openai": "OpenAI GPT-3.5",
+            "gemini": "Google Gemini",
+            "mistral": "Mistral AI"
+        }
+        return f"Switched to {model_names[model_name]}"
+    return "Invalid model selection"
+
 def create_ui():
     """Create the Gradio UI"""
     with gr.Blocks(title="Cloud Architecture Design Assistant", theme=gr.themes.Soft()) as demo:
         gr.Markdown("# Cloud Architecture Design Assistant")
         gr.Markdown("Design your AWS cloud architecture through an interactive interface.")
         
-        # API Status at the top
+        # API Status and Model Selection at the top
         with gr.Row():
             with gr.Column(scale=1):
                 api_status = gr.Textbox(
                     label="API Status",
-                    value=initialize_api_clients(),
+                    value="Initializing...",
                     lines=3,
                     interactive=False
                 )
+                
+                # Store available models
+                available_models = gr.State([])
+                
+                # Model selection dropdown (initially empty)
+                model_dropdown = gr.Dropdown(
+                    label="Select AI Model",
+                    choices=[],
+                    value=None,
+                    visible=False,
+                    interactive=True
+                )
+                
+                model_status = gr.Textbox(
+                    label="Model Status",
+                    value="",
+                    lines=1,
+                    interactive=False
+                )
+                
                 retry_btn = gr.Button("Retry API Connection", variant="secondary")
-                retry_btn.click(fn=initialize_api_clients, inputs=[], outputs=[api_status])
         
+        def init_models():
+            status, models = initialize_api_clients()
+            model_choices = []
+            if "openai" in models:
+                model_choices.append(("OpenAI GPT-3.5", "openai"))
+            if "gemini" in models:
+                model_choices.append(("Google Gemini", "gemini"))
+            if "mistral" in models:
+                model_choices.append(("Mistral AI", "mistral"))
+            
+            return (
+                status,  # API status
+                gr.Dropdown(choices=model_choices, value=models[0] if models else None, visible=bool(models)),  # Updated dropdown
+                models,  # Available models list
+                f"Using {model_choices[0][0]}" if model_choices else ""  # Initial model status
+            )
+        
+        # Initialize models on page load
+        demo.load(
+            fn=init_models,
+            outputs=[api_status, model_dropdown, available_models, model_status]
+        )
+        
+        # Handle model switching
+        model_dropdown.change(
+            fn=switch_model,
+            inputs=[model_dropdown],
+            outputs=[model_status]
+        )
+        
+        # Handle retry button
+        retry_btn.click(
+            fn=init_models,
+            outputs=[api_status, model_dropdown, available_models, model_status]
+        )
+
         # Store total questions as a state variable
         total_questions = gr.State(value=10)
         
