@@ -253,44 +253,6 @@ def get_ai_response(prompt, system_message):
         print_error(f"Error getting AI response: {str(e)}")
         raise
 
-def generate_cost_estimate(architecture_prompt: str) -> Dict:
-    """Generate cost estimate for the proposed architecture"""
-    context = f"""Based on the following AWS architecture, provide a detailed cost estimate:
-{architecture_prompt}
-
-Generate a JSON response with the following structure:
-{{
-    "monthly_estimate": {{
-        "total_cost": float,
-        "breakdown": {{
-            "compute": float,
-            "storage": float,
-            "network": float,
-            "other": float
-        }},
-        "cost_optimization_suggestions": [string]
-    }},
-    "annual_estimate": {{
-        "total_cost": float,
-        "potential_savings": float,
-        "savings_strategies": [string]
-    }}
-}}"""
-
-    system_message = """You are an AWS cost optimization expert. Provide detailed cost estimates and optimization suggestions.
-Include specific AWS service costs and potential savings strategies."""
-
-    try:
-        response = get_ai_response(context, system_message)
-        # Extract JSON from response
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        return None
-    except Exception as e:
-        print_error(f"Error generating cost estimate: {str(e)}")
-        return None
-
 def generate_security_assessment(architecture_prompt: str) -> Dict:
     """Generate security assessment for the proposed architecture"""
     context = f"""Based on the following AWS architecture, provide a security assessment:
@@ -323,17 +285,12 @@ Focus on AWS security best practices and compliance requirements."""
         print_error(f"Error generating security assessment: {str(e)}")
         return None
 
-def save_analysis_results(project_title: str, architecture_prompt: str, cost_estimate: Optional[Dict], security_assessment: Optional[Dict]):
+def save_analysis_results(project_title: str, architecture_prompt: str, security_assessment: Optional[Dict]):
     """Save all analysis results to files"""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
     # Save architecture
     architecture_filename = save_file(project_title, architecture_prompt, "Architecture")
-    
-    # Save cost estimate
-    if cost_estimate:
-        cost_filename = save_file(project_title, json.dumps(cost_estimate, indent=2), "CostEstimate")
-        print_info(f"Cost estimate has been saved to '{cost_filename}'")
     
     # Save security assessment
     if security_assessment:
@@ -542,18 +499,13 @@ def main():
         time.sleep(1)
         architecture_prompt = generate_architecture_prompt(project_details, questions, answers)
         
-        # Generate cost estimate
-        print_info("\nGenerating cost estimate...")
-        time.sleep(1)
-        cost_estimate = generate_cost_estimate(architecture_prompt)
-        
         # Generate security assessment
         print_info("\nPerforming security assessment...")
         time.sleep(1)
         security_assessment = generate_security_assessment(architecture_prompt)
         
         # Save all results
-        architecture_filename = save_analysis_results(project_details['title'], architecture_prompt, cost_estimate, security_assessment)
+        architecture_filename = save_analysis_results(project_details['title'], architecture_prompt, security_assessment)
         
         # Save conversation
         conversation_filename = save_file(project_details['title'], "\n".join(conversation), "Conversation")
@@ -562,10 +514,6 @@ def main():
         print_success("\nGreat! I've generated a comprehensive analysis of your cloud architecture.")
         print_info(f"The complete conversation has been saved to '{conversation_filename}'")
         print_info(f"The architecture has been saved to '{architecture_filename}'")
-        
-        if cost_estimate:
-            print_info(f"Monthly estimated cost: ${cost_estimate['monthly_estimate']['total_cost']:.2f}")
-            print_info("Check the cost estimate file for detailed breakdown and optimization suggestions.")
         
         if security_assessment:
             print_info(f"Security score: {security_assessment['security_score']}/100")
