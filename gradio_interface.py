@@ -453,7 +453,7 @@ def switch_model(model_name):
     if model_name in ["openai", "gemini", "mistral"]:
         active_api = model_name
         model_names = {
-            "openai": "OpenAI GPT-3.5",
+            "openai": "OpenAI ChatGPT",
             "gemini": "Google Gemini",
             "mistral": "Mistral AI"
         }

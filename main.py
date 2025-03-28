@@ -110,7 +110,7 @@ def save_file(project_title, content, file_type):
 def generate_with_openai(prompt, system_message):
     """Generate response using OpenAI API"""
     response = openai_client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-2024-11-20",
         messages=[
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt}
@@ -143,7 +143,7 @@ def generate_with_mistral(prompt, system_message):
 def get_active_model():
     """Get the active model that will be used for responses"""
     if active_api == "openai":
-        return "OpenAI GPT-3.5"
+        return "OpenAI ChatGPT"
     elif active_api == "gemini":
         return "Google Gemini"
     elif active_api == "mistral":
