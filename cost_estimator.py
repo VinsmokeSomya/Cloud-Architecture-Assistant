@@ -3,6 +3,7 @@ import json
 import os
 from dotenv import load_dotenv
 import re
+from datetime import datetime
 
 # Load environment variables (if needed for AWS credentials or region)
 load_dotenv()
@@ -93,37 +94,44 @@ def get_location_from_region(region_code):
     """Maps an AWS region code to its Pricing API location name."""
     return REGION_MAP.get(region_code, f"Region not mapped: {region_code}")
 
+def format_currency(amount):
+    """Format currency with thousand separators and 2 decimal places."""
+    return f"${amount:,.2f}"
+
+def format_number(number):
+    """Format numbers with thousand separators."""
+    return f"{number:,}"
+
 def get_product_price(service_code, filters):
-    """Get the price for a product based on filters"""
+    """Get the price for a product using AWS Pricing API."""
     try:
-        pricing = boto3.client('pricing', region_name='us-east-1')
-        response = pricing.get_products(ServiceCode=service_code, Filters=filters)
         print(f"\nDebug - Raw price data for {service_code}:")
+        response = pricing_client.get_products(
+            ServiceCode=service_code,
+            Filters=filters,
+            MaxResults=1
+        )
         print(json.dumps(response, indent=2))
         
         if not response['PriceList']:
             print(f"\nDebug - No price found for {service_code} with filters:")
             print(json.dumps(filters, indent=2))
             return 0
-
-        for price_item in response['PriceList']:
-            if isinstance(price_item, str):
-                price_item = json.loads(price_item)
             
-            print("\nDebug - Product attributes:")
-            print(json.dumps(price_item.get('product', {}).get('attributes', {}), indent=2))
-            
-            terms = price_item.get('terms', {}).get('OnDemand', {})
-            for term_id, term in terms.items():
-                dimensions = term.get('priceDimensions', {})
-                for dimension_id, dimension in dimensions.items():
-                    price = float(dimension.get('pricePerUnit', {}).get('USD', 0))
-                    print(f"\nDebug - Price dimension:")
-                    print(json.dumps(dimension, indent=2))
-                    return price
-        return 0
+        price_list = json.loads(response['PriceList'][0])
+        print("\nDebug - Product attributes:")
+        print(json.dumps(price_list['product']['attributes'], indent=2))
+        
+        # Get the first price dimension
+        terms = price_list['terms']['OnDemand']
+        first_term = next(iter(terms.values()))
+        price_dimension = next(iter(first_term['priceDimensions'].values()))
+        print("\nDebug - Price dimension:")
+        print(json.dumps(price_dimension, indent=2))
+        
+        return float(price_dimension['pricePerUnit']['USD'])
     except Exception as e:
-        print(f"Error getting price: {str(e)}")
+        print(f"Error getting price for {service_code}: {str(e)}")
         return 0
 
 # --- Service Specific Handlers ---
@@ -171,9 +179,9 @@ def estimate_ec2_cost(node):
     print(f"  ├─ Region: {region}")
     print(f"  ├─ Tenancy: {tenancy}")
     print(f"  ├─ Quantity: {quantity}")
-    print(f"  ├─ Hourly Rate: ${hourly_price:.4f}")
+    print(f"  ├─ Hourly Rate: {format_currency(hourly_price)}")
     print(f"  ├─ Hours per Month: {HOURS_PER_MONTH}")
-    print(f"  └─ Monthly Cost: ${hourly_price * HOURS_PER_MONTH * quantity:.2f}")
+    print(f"  └─ Monthly Cost: {format_currency(hourly_price * HOURS_PER_MONTH * quantity)}")
     
     return hourly_price * HOURS_PER_MONTH * quantity
 
@@ -208,10 +216,10 @@ def estimate_s3_cost(node):
     print(f"  ├─ Storage Class: {storage_class}")
     print(f"  ├─ Region: {region}")
     print(f"  ├─ Storage Size: {storage_size}GB")
-    print(f"  ├─ Estimated Monthly Requests: {monthly_requests:,}")
-    print(f"  ├─ Request Rate: ${request_price:.6f}/1000 requests" if request_price else "  ├─ Request Rate: Unknown")
-    print(f"  ├─ Request Monthly Cost: ${request_cost:.2f}")
-    print(f"  └─ Total Monthly Cost: ${total_cost:.2f}")
+    print(f"  ├─ Estimated Monthly Requests: {format_number(monthly_requests)}")
+    print(f"  ├─ Request Rate: {format_currency(request_price)}/1000 requests" if request_price else "  ├─ Request Rate: Unknown")
+    print(f"  ├─ Request Monthly Cost: {format_currency(request_cost)}")
+    print(f"  └─ Total Monthly Cost: {format_currency(total_cost)}")
 
     return total_cost
 
@@ -257,16 +265,16 @@ def estimate_lambda_cost(node):
         print(f"  ├─ Memory: {memory:.1f}MB")
         print(f"  ├─ Architecture: {architecture}")
         print(f"  ├─ Region: {region}")
-        print(f"  ├─ Monthly Requests: {monthly_requests:,}")
+        print(f"  ├─ Monthly Requests: {format_number(monthly_requests)}")
         print(f"  ├─ Avg. Duration: {avg_duration*1000:.0f}ms")
-        print(f"  ├─ Computed GB-seconds: {gb_seconds:,.2f}")
+        print(f"  ├─ Computed GB-seconds: {format_number(gb_seconds)}")
         if request_price:
-            print(f"  ├─ Request Rate: ${request_price:.6f}/million requests")
-            print(f"  ├─ Request Cost: ${request_cost:.2f}")
+            print(f"  ├─ Request Rate: {format_currency(request_price)}/million requests")
+            print(f"  ├─ Request Cost: {format_currency(request_cost)}")
         if duration_price:
-            print(f"  ├─ Duration Rate: ${duration_price:.6f}/GB-second")
-            print(f"  ├─ Duration Cost: ${duration_cost:.2f}")
-        print(f"  └─ Total Monthly Cost: ${total_cost:.2f}")
+            print(f"  ├─ Duration Rate: {format_currency(duration_price)}/GB-second")
+            print(f"  ├─ Duration Cost: {format_currency(duration_cost)}")
+        print(f"  └─ Total Monthly Cost: {format_currency(total_cost)}")
         
         return total_cost
     except Exception as e:
@@ -326,14 +334,452 @@ def estimate_rds_cost(node):
     print(f"  ├─ Storage: {storage_size}GB {storage_type}")
     print(f"  ├─ Quantity: {quantity}")
     if hourly_price:
-        print(f"  ├─ Instance Hourly Rate: ${hourly_price:.4f}")
-        print(f"  ├─ Instance Monthly Cost: ${instance_monthly:.2f}")
+        print(f"  ├─ Instance Hourly Rate: {format_currency(hourly_price)}")
+        print(f"  ├─ Instance Monthly Cost: {format_currency(instance_monthly)}")
     if storage_price:
-        print(f"  ├─ Storage Rate (per GB-month): ${storage_price:.4f}")
-        print(f"  ├─ Storage Monthly Cost: ${storage_monthly:.2f}")
-    print(f"  └─ Total Monthly Cost: ${total_monthly:.2f}")
+        print(f"  ├─ Storage Rate (per GB-month): {format_currency(storage_price)}")
+        print(f"  ├─ Storage Monthly Cost: {format_currency(storage_monthly)}")
+    print(f"  └─ Total Monthly Cost: {format_currency(total_monthly)}")
     
     return total_monthly
+
+def estimate_api_gateway_cost(component):
+    try:
+        region = component.get('Region', 'us-east-1')
+        monthly_requests = int(component.get('MonthlyRequests', 0))
+        cache_size = float(component.get('CacheSize', 0))
+        
+        # Get API Gateway request price
+        request_price = get_product_price('AmazonApiGateway', [
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'API Calls'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'APIGateway-Requests'},
+            {'Type': 'TERM_MATCH', 'Field': 'requestType', 'Value': 'REST'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-APIRequest'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'APICall'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AmazonApiGateway'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'Amazon API Gateway'}
+        ])
+        
+        # Get API Gateway cache price
+        cache_price = get_product_price('AmazonApiGateway', [
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'API Gateway Cache'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'APIGateway-Cache'},
+            {'Type': 'TERM_MATCH', 'Field': 'cacheSize', 'Value': '1.6'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-APICache'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'Cache'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AmazonApiGateway'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'Amazon API Gateway'}
+        ])
+        
+        request_cost = (monthly_requests / 1000000) * request_price
+        cache_cost = cache_size * cache_price
+        
+        total_cost = request_cost + cache_cost
+        
+        print(f"\n  API Gateway: '{component.get('Name', 'Unnamed')}'")
+        print(f"  ├─ Region: {region}")
+        print(f"  ├─ Monthly Requests: {format_number(monthly_requests)}")
+        print(f"  ├─ Cache Size: {format_number(cache_size)}GB")
+        print(f"  ├─ Request Rate: ${format_currency(request_price)}/million requests")
+        print(f"  ├─ Request Cost: ${format_currency(request_cost)}")
+        print(f"  ├─ Cache Rate: ${format_currency(cache_price)}/GB-month")
+        print(f"  ├─ Cache Cost: ${format_currency(cache_cost)}")
+        print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+        
+        return total_cost
+    except Exception as e:
+        print(f"Error estimating API Gateway cost: {str(e)}")
+        return 0
+
+def estimate_autoscaling_cost(component):
+    """Estimate cost for Auto Scaling Group"""
+    try:
+        # Auto Scaling itself is free, but we'll calculate the cost of the instances it manages
+        launch_config = component.get('LaunchConfiguration', {})
+        instance_type = launch_config.get('InstanceType', 't3.micro')
+        min_size = int(launch_config.get('MinSize', 1))
+        max_size = int(launch_config.get('MaxSize', 1))
+        desired_capacity = int(launch_config.get('DesiredCapacity', 1))
+        
+        # Get EC2 instance pricing
+        filters = [
+            {'Type': 'TERM_MATCH', 'Field': 'instanceType', 'Value': instance_type},
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': component.get('region', 'Asia Pacific (Mumbai)')},
+            {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Linux'},
+            {'Type': 'TERM_MATCH', 'Field': 'tenancy', 'Value': 'Shared'},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'}
+        ]
+        hourly_rate = get_product_price('AmazonEC2', filters)
+        
+        # Calculate costs based on desired capacity
+        monthly_hours = 730  # Average hours in a month
+        instance_cost = hourly_rate * monthly_hours
+        
+        total_cost = instance_cost * desired_capacity
+        
+        print(f"\n  Auto Scaling: '{component.get('label', 'Unnamed')}'")
+        print(f"  ├─ Instance Type: {instance_type}")
+        print(f"  ├─ Region: {component.get('region', 'Asia Pacific (Mumbai)')}")
+        print(f"  ├─ Min Size: {min_size}")
+        print(f"  ├─ Max Size: {max_size}")
+        print(f"  ├─ Desired Capacity: {desired_capacity}")
+        print(f"  ├─ Hourly Rate: ${format_currency(hourly_rate)}")
+        print(f"  ├─ Monthly Hours: {format_number(monthly_hours)}")
+        print(f"  ├─ Instance Monthly Cost: ${format_currency(instance_cost)}")
+        print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+        
+        return total_cost
+    except Exception as e:
+        print(f"Error estimating Auto Scaling cost: {str(e)}")
+        return 0
+
+def estimate_vpc_cost(component):
+    """Estimate cost for Amazon VPC"""
+    try:
+        # VPC itself is free, but we'll calculate costs for NAT Gateway and VPC Endpoints if specified
+        nat_gateway_count = component.get('NatGatewayCount', 0)
+        vpc_endpoint_count = component.get('VpcEndpointCount', 0)
+        
+        # Get NAT Gateway pricing
+        nat_filters = [
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': component.get('region', 'Asia Pacific (Mumbai)')},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'NAT Gateway'}
+        ]
+        nat_hourly_rate = get_product_price('AmazonVPC', nat_filters)
+        
+        # Get VPC Endpoint pricing
+        endpoint_filters = [
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': component.get('region', 'Asia Pacific (Mumbai)')},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'VPC Endpoint'}
+        ]
+        endpoint_hourly_rate = get_product_price('AmazonVPC', endpoint_filters)
+        
+        # Calculate costs
+        monthly_hours = 730  # Average hours in a month
+        nat_cost = nat_hourly_rate * monthly_hours * nat_gateway_count
+        endpoint_cost = endpoint_hourly_rate * monthly_hours * vpc_endpoint_count
+        total_cost = nat_cost + endpoint_cost
+        
+        print(f"\n  VPC: '{component.get('label', 'Unnamed')}'")
+        print(f"  ├─ Region: {component.get('region', 'Asia Pacific (Mumbai)')}")
+        print(f"  ├─ NAT Gateway Count: {nat_gateway_count}")
+        print(f"  ├─ NAT Gateway Rate: ${format_currency(nat_hourly_rate)}/hour")
+        print(f"  ├─ NAT Gateway Cost: ${format_currency(nat_cost)}")
+        print(f"  ├─ VPC Endpoint Count: {vpc_endpoint_count}")
+        print(f"  ├─ VPC Endpoint Rate: ${format_currency(endpoint_hourly_rate)}/hour")
+        print(f"  ├─ VPC Endpoint Cost: ${format_currency(endpoint_cost)}")
+        print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+        
+        return total_cost
+    except Exception as e:
+        print(f"Error estimating VPC cost: {str(e)}")
+        return 0
+
+def estimate_dynamodb_cost(component):
+    """Estimate cost for Amazon DynamoDB"""
+    try:
+        # Get DynamoDB pricing
+        filters = [
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': component.get('region', 'Asia Pacific (Mumbai)')},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'DynamoDB'}
+        ]
+        wcu_rate = get_product_price('AmazonDynamoDB', filters)
+        
+        # Calculate costs
+        wcu = component.get('WriteCapacityUnits', 0)
+        rcu = component.get('ReadCapacityUnits', 0)
+        storage_gb = component.get('StorageGB', 0)
+        
+        wcu_cost = wcu * wcu_rate * 730  # Monthly hours
+        rcu_cost = rcu * (wcu_rate * 0.5) * 730  # Read units are typically half the cost of write units
+        storage_cost = storage_gb * 0.25  # $0.25 per GB-month
+        
+        total_cost = wcu_cost + rcu_cost + storage_cost
+        
+        print(f"\n  DynamoDB: '{component.get('label', 'Unnamed')}'")
+        print(f"  ├─ Region: {component.get('region', 'Asia Pacific (Mumbai)')}")
+        print(f"  ├─ Write Capacity Units: {format_number(wcu)}")
+        print(f"  ├─ Read Capacity Units: {format_number(rcu)}")
+        print(f"  ├─ Storage: {format_number(storage_gb)}GB")
+        print(f"  ├─ WCU Rate: ${format_currency(wcu_rate)}/hour")
+        print(f"  ├─ WCU Cost: ${format_currency(wcu_cost)}")
+        print(f"  ├─ RCU Cost: ${format_currency(rcu_cost)}")
+        print(f"  ├─ Storage Cost: ${format_currency(storage_cost)}")
+        print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+        
+        return total_cost
+    except Exception as e:
+        print(f"Error estimating DynamoDB cost: {str(e)}")
+        return 0
+
+def estimate_ebs_cost(component):
+    """Estimate cost for Amazon EBS"""
+    try:
+        # Get EBS pricing
+        filters = [
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': component.get('region', 'Asia Pacific (Mumbai)')},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Storage'},
+            {'Type': 'TERM_MATCH', 'Field': 'volumeType', 'Value': component.get('VolumeType', 'General Purpose')}
+        ]
+        storage_rate = get_product_price('AmazonEC2', filters)
+        
+        # Calculate costs
+        volume_count = int(component.get('VolumeCount', 1))
+        volume_size_gb = float(component.get('VolumeSizeGB', 100))
+        
+        storage_cost = volume_count * volume_size_gb * storage_rate
+        
+        print(f"\n  EBS: '{component.get('label', 'Unnamed')}'")
+        print(f"  ├─ Region: {component.get('region', 'Asia Pacific (Mumbai)')}")
+        print(f"  ├─ Volume Type: {component.get('VolumeType', 'General Purpose')}")
+        print(f"  ├─ Volume Count: {volume_count}")
+        print(f"  ├─ Volume Size: {format_number(volume_size_gb)}GB")
+        print(f"  ├─ Storage Rate: ${format_currency(storage_rate)}/GB-month")
+        print(f"  └─ Total Monthly Cost: ${format_currency(storage_cost)}")
+        
+        return storage_cost
+    except Exception as e:
+        print(f"Error estimating EBS cost: {str(e)}")
+        return 0
+
+def estimate_sns_cost(component):
+    """Estimate cost for Amazon SNS"""
+    region = component.get('region', 'us-east-1')
+    topic_count = int(component.get('topic_count', 0))
+    monthly_publishes = int(component.get('monthly_publishes', 0))
+    
+    # Get SNS delivery price
+    delivery_price = get_product_price(
+        service_code='AmazonSNS',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Message Delivery'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-DeliveryAttempts'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'MessageDelivery'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'Delivery'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AmazonSNS'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'Amazon Simple Notification Service'}
+        ]
+    )
+    
+    # Get SNS topic price
+    topic_price = get_product_price(
+        service_code='AmazonSNS',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Topic'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-Topic'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'Topic'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'Topic'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AmazonSNS'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'Amazon Simple Notification Service'}
+        ]
+    )
+    
+    # Calculate costs
+    delivery_cost = (monthly_publishes / 1000000) * delivery_price if delivery_price else 0
+    topic_cost = topic_count * topic_price if topic_price else 0
+    total_cost = delivery_cost + topic_cost
+    
+    print(f"\n  SNS: '{component.get('name', 'Unnamed')}'")
+    print(f"  ├─ Region: {region}")
+    print(f"  ├─ Topic Count: {topic_count}")
+    print(f"  ├─ Monthly Publishes: {monthly_publishes}")
+    print(f"  ├─ Delivery Rate: ${format_currency(delivery_price)}/million")
+    print(f"  ├─ Delivery Cost: ${format_currency(delivery_cost)}")
+    print(f"  ├─ Topic Rate: ${format_currency(topic_price)}/topic")
+    print(f"  ├─ Topic Cost: ${format_currency(topic_cost)}")
+    print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+    
+    return total_cost
+
+def estimate_elb_cost(component):
+    """Estimate cost for Elastic Load Balancer"""
+    region = component.get('region', 'us-east-1')
+    monthly_hours = 730  # Hours in a month
+    lcu_count = int(component.get('lcu_count', 0))
+    
+    # Get ELB hourly price
+    hourly_price = get_product_price(
+        service_code='AWSELB',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Load Balancer'},
+            {'Type': 'TERM_MATCH', 'Field': 'loadBalancerType', 'Value': 'Application'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'LoadBalancer'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-LoadBalancerUsage'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'LoadBalancer'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AWSELB'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'AWS Elastic Load Balancing'}
+        ]
+    )
+    
+    # Get ELB LCU price
+    lcu_price = get_product_price(
+        service_code='AWSELB',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Load Balancer'},
+            {'Type': 'TERM_MATCH', 'Field': 'loadBalancerType', 'Value': 'Application'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'LCU'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-LCUUsage'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'LCU'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AWSELB'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'AWS Elastic Load Balancing'}
+        ]
+    )
+    
+    # Calculate costs
+    hourly_cost = monthly_hours * hourly_price if hourly_price else 0
+    lcu_cost = lcu_count * lcu_price if lcu_price else 0
+    total_cost = hourly_cost + lcu_cost
+    
+    print(f"\n  ELB: '{component.get('name', 'Unnamed')}'")
+    print(f"  ├─ Region: {region}")
+    print(f"  ├─ Load Balancer Type: Application")
+    print(f"  ├─ Monthly Hours: {monthly_hours}")
+    print(f"  ├─ LCU Count: {lcu_count}")
+    print(f"  ├─ Hourly Rate: ${format_currency(hourly_price)}/hour")
+    print(f"  ├─ Hourly Cost: ${format_currency(hourly_cost)}")
+    print(f"  ├─ LCU Rate: ${format_currency(lcu_price)}/LCU")
+    print(f"  ├─ LCU Cost: ${format_currency(lcu_cost)}")
+    print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+    
+    return total_cost
+
+def estimate_efs_cost(component):
+    """Estimate cost for Elastic File System"""
+    region = component.get('region', 'us-east-1')
+    storage_size = float(component.get('storage_size', 0))
+    monthly_operations = int(component.get('monthly_operations', 0))
+    
+    # Get EFS storage price
+    storage_price = get_product_price(
+        service_code='AmazonEFS',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Storage'},
+            {'Type': 'TERM_MATCH', 'Field': 'storageClass', 'Value': 'General Purpose'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'Storage'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-StorageUsage'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'Storage'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AmazonEFS'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'Amazon Elastic File System'}
+        ]
+    )
+    
+    # Get EFS IO price
+    io_price = get_product_price(
+        service_code='AmazonEFS',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Storage'},
+            {'Type': 'TERM_MATCH', 'Field': 'storageClass', 'Value': 'General Purpose'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'IO'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-IOUsage'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'IO'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AmazonEFS'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'Amazon Elastic File System'}
+        ]
+    )
+    
+    # Calculate costs
+    storage_cost = storage_size * storage_price if storage_price else 0
+    io_cost = (monthly_operations / 1000000) * io_price if io_price else 0
+    total_cost = storage_cost + io_cost
+    
+    print(f"\n  EFS: '{component.get('name', 'Unnamed')}'")
+    print(f"  ├─ Region: {region}")
+    print(f"  ├─ Storage Size: {storage_size}GB")
+    print(f"  ├─ Monthly Operations: {monthly_operations}")
+    print(f"  ├─ Storage Rate: ${format_currency(storage_price)}/GB-month")
+    print(f"  ├─ Storage Cost: ${format_currency(storage_cost)}")
+    print(f"  ├─ IO Rate: ${format_currency(io_price)}/million operations")
+    print(f"  ├─ IO Cost: ${format_currency(io_cost)}")
+    print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+    
+    return total_cost
+
+def estimate_sqs_cost(component):
+    """Estimate cost for Simple Queue Service"""
+    region = component.get('region', 'us-east-1')
+    queue_count = int(component.get('queue_count', 0))
+    monthly_requests = int(component.get('monthly_requests', 0))
+    
+    # Get SQS request price
+    request_price = get_product_price(
+        service_code='AmazonSQS',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'Message Queue'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'API-Request'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-Request'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'Request'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AmazonSQS'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'Amazon Simple Queue Service'},
+            {'Type': 'TERM_MATCH', 'Field': 'queueType', 'Value': 'Standard'}
+        ]
+    )
+    
+    # Calculate costs
+    request_cost = (monthly_requests / 1000000) * request_price if request_price else 0
+    total_cost = request_cost
+    
+    print(f"\n  SQS: '{component.get('name', 'Unnamed')}'")
+    print(f"  ├─ Region: {region}")
+    print(f"  ├─ Queue Count: {queue_count}")
+    print(f"  ├─ Monthly Requests: {monthly_requests}")
+    print(f"  ├─ Request Rate: ${format_currency(request_price)}/million requests")
+    print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+    
+    return total_cost
+
+def estimate_iam_analyzer_cost(component):
+    """Estimate cost for IAM Access Analyzer"""
+    region = component.get('region', 'us-east-1')
+    analyzer_count = int(component.get('analyzer_count', 0))
+    
+    # Get analyzer price
+    analyzer_price = get_product_price(
+        service_code='AWSAccessAnalyzer',
+        filters=[
+            {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': region},
+            {'Type': 'TERM_MATCH', 'Field': 'termType', 'Value': 'OnDemand'},
+            {'Type': 'TERM_MATCH', 'Field': 'productFamily', 'Value': 'IAM Access Analyzer'},
+            {'Type': 'TERM_MATCH', 'Field': 'group', 'Value': 'Analyzer'},
+            {'Type': 'TERM_MATCH', 'Field': 'usagetype', 'Value': 'APS3-AnalyzerUsage'},
+            {'Type': 'TERM_MATCH', 'Field': 'operation', 'Value': 'Analyzer'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicecode', 'Value': 'AWSAccessAnalyzer'},
+            {'Type': 'TERM_MATCH', 'Field': 'servicename', 'Value': 'AWS IAM Access Analyzer'},
+            {'Type': 'TERM_MATCH', 'Field': 'analyzerType', 'Value': 'Standard'}
+        ]
+    )
+    
+    # Calculate costs
+    total_cost = analyzer_count * analyzer_price if analyzer_price else 0
+    
+    print(f"\n  IAM Access Analyzer: '{component.get('name', 'Unnamed')}'")
+    print(f"  ├─ Region: {region}")
+    print(f"  ├─ Analyzer Count: {analyzer_count}")
+    print(f"  ├─ Rate per Analyzer: ${format_currency(analyzer_price)}/month")
+    print(f"  └─ Total Monthly Cost: ${format_currency(total_cost)}")
+    
+    return total_cost
 
 # Mapping from component type in JSON to handler function
 # Uses the type names found in templet_arch.json
@@ -342,8 +788,16 @@ COMPONENT_HANDLERS = {
     "AmazonS3": estimate_s3_cost,
     "AWSLambda": estimate_lambda_cost,
     "AmazonRDS": estimate_rds_cost,
-    # Add other component types from JSON and their handlers here
-    # e.g., "AmazonAPIGateway", "AutoScaling", "AmazonDynamoDB", etc.
+    "AmazonAPIGateway": estimate_api_gateway_cost,
+    "AutoScaling": estimate_autoscaling_cost,
+    "AmazonVPC": estimate_vpc_cost,
+    "AmazonDynamoDB": estimate_dynamodb_cost,
+    "AmazonEBS": estimate_ebs_cost,
+    "AmazonSNS": estimate_sns_cost,
+    "AWSELB": estimate_elb_cost,
+    "AWSEFS": estimate_efs_cost,
+    "AmazonSQS": estimate_sqs_cost,
+    "AWSIAMAccessAnalyzer": estimate_iam_analyzer_cost
 }
 
 def estimate_cost_from_json(architecture_json_path):
@@ -396,11 +850,11 @@ def estimate_cost_from_json(architecture_json_path):
             
     print("-----------------------------------------")
     
-    print(f"\nEstimated Total Monthly Cost: ${total_cost:.2f}")
+    print(f"\nEstimated Total Monthly Cost: {format_currency(total_cost)}")
     print("\nCost Breakdown:")
     if cost_breakdown:
         for item, cost in cost_breakdown.items():
-            print(f"- {item}: ${cost:.2f}")
+            print(f"- {item}: {format_currency(cost)}")
     else:
         print("(No costs calculated or all components skipped)")
         
@@ -409,8 +863,8 @@ def estimate_cost_from_json(architecture_json_path):
 if __name__ == "__main__":
     # Example Usage: Replace with the actual path to your generated JSON
     # architecture_file = "path/to/your/architecture.json" 
-    # architecture_file = "templet_arch.json" # Using the template for now as an example
-    architecture_file = "demo_arch.json" # Use the demo file for testing
+    architecture_file = "templet_arch.json" # Using the template for now as an example
+    # architecture_file = "demo_arch.json" # Use the demo file for testing
     
     if os.path.exists(architecture_file):
         estimate_cost_from_json(architecture_file)

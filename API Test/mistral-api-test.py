@@ -1,5 +1,4 @@
-from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
+from mistralai import Mistral  # Updated Mistral import
 from dotenv import load_dotenv
 import os
 
@@ -7,11 +6,11 @@ import os
 load_dotenv()
 
 # Configure the API
-client = MistralClient(api_key=os.getenv("MISTRAL_API_KEY"))
+client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
 
 # List available models
 print("Available Models:")
-models = client.list_models()
+models = client.models.list()
 if hasattr(models, 'data'):
     for model in models.data:  # Access the list of models
         print(f"- {model.id}")  # Print each model's ID
@@ -24,11 +23,11 @@ model = "open-mixtral-8x22b"  # Most powerful model for general tasks
 # Test the API with a simple prompt
 print("\nTesting API with a simple prompt:")
 messages = [
-    ChatMessage(role="user", content="Yo!, this is a test message.")
+    {"role": "user", "content": "Yo!, this is a test message."}
 ]
 
 try:
-    response = client.chat(
+    response = client.chat.complete(
         model=model,
         messages=messages
     )

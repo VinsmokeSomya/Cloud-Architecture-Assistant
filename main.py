@@ -1,18 +1,16 @@
 import os  # Importing the os module for environment variable access
 from openai import OpenAI  # Updated OpenAI import
 import google.generativeai as genai  # Importing the Google Generative AI client
-from mistralai.client import MistralClient  # Importing the Mistral API client
-from mistralai.models.chat_completion import ChatMessage  # Importing the ChatMessage model from Mistral
+from mistralai import Mistral  # Updated Mistral import
 from dotenv import load_dotenv  # Importing the dotenv module to load environment variables from a .env file
 from colorama import init, Fore, Style
 from datetime import datetime
 import time
-from mistralai.models.chat_completion import ChatMessage as MistralChatMessage  # Alternative import
 
 # Add new imports
 import json
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 # Initialize colorama
 init()
@@ -80,7 +78,7 @@ elif is_valid_api_key(GEMINI_API_KEY):
 # Initialize Mistral if neither OpenAI nor Gemini are available
 elif is_valid_api_key(MISTRAL_API_KEY):
     try:
-        mistral_client = MistralClient(api_key=MISTRAL_API_KEY)
+        mistral_client = Mistral(api_key=MISTRAL_API_KEY)
         active_api = "mistral"
     except Exception as e:
         print_error(f"Error initializing Mistral: {str(e)}")
@@ -127,11 +125,11 @@ def generate_with_gemini(prompt, system_message):
 def generate_with_mistral(prompt, system_message):
     """Generate response using Mistral API"""
     messages = [
-        ChatMessage(role="system", content=system_message),
-        ChatMessage(role="user", content=prompt)
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": prompt}
     ]
     try:
-        response = mistral_client.chat(
+        response = mistral_client.chat.complete(
             model="mistral-large-latest",
             messages=messages
         )
@@ -269,10 +267,10 @@ def get_ai_response(prompt, system_message):
                 return response.text, None
             elif active_api == "mistral" and mistral_client:
                 messages = [
-                    ChatMessage(role="system", content=system_message),
-                    ChatMessage(role="user", content=prompt)
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
                 ]
-                response = mistral_client.chat(
+                response = mistral_client.chat.complete(
                     model="mistral-large-latest",
                     messages=messages
                 )

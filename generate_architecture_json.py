@@ -3,8 +3,7 @@ import json
 import re
 from openai import OpenAI
 import google.generativeai as genai
-from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
+from mistralai import Mistral
 from dotenv import load_dotenv
 from colorama import init, Fore, Style
 from datetime import datetime
@@ -67,7 +66,7 @@ elif is_valid_api_key(GEMINI_API_KEY):
 # Initialize Mistral if neither OpenAI nor Gemini are available
 elif is_valid_api_key(MISTRAL_API_KEY):
     try:
-        mistral_client = MistralClient(api_key=MISTRAL_API_KEY)
+        mistral_client = Mistral(api_key=MISTRAL_API_KEY)
         active_api = "mistral"
     except Exception as e:
         print_error(f"Error initializing Mistral: {str(e)}")
@@ -92,11 +91,11 @@ def generate_with_gemini(prompt, system_message):
 def generate_with_mistral(prompt, system_message):
     """Generate response using Mistral API"""
     messages = [
-        ChatMessage(role="system", content=system_message),
-        ChatMessage(role="user", content=prompt)
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": prompt}
     ]
     try:
-        response = mistral_client.chat(
+        response = mistral_client.chat.complete(
             model="mistral-large-latest",
             messages=messages
         )
@@ -123,10 +122,10 @@ def get_ai_response(prompt, system_message):
             return response.text
         elif active_api == "mistral" and mistral_client:
             messages = [
-                ChatMessage(role="system", content=system_message),
-                ChatMessage(role="user", content=prompt)
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt}
             ]
-            response = mistral_client.chat(
+            response = mistral_client.chat.complete(
                 model="mistral-large-latest",
                 messages=messages
             )

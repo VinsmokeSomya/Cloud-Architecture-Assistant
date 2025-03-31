@@ -4,8 +4,7 @@ import re
 import gradio as gr
 from openai import OpenAI
 import google.generativeai as genai
-from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
+from mistralai import Mistral
 from dotenv import load_dotenv
 from datetime import datetime
 import time
@@ -72,7 +71,7 @@ def initialize_api_clients():
     # Try Mistral
     if is_valid_api_key(MISTRAL_API_KEY):
         try:
-            mistral_client = MistralClient(api_key=MISTRAL_API_KEY)
+            mistral_client = Mistral(api_key=MISTRAL_API_KEY)
             available_models.append("mistral")
             status_messages.append("✅ Mistral API initialized successfully")
         except Exception as e:
@@ -124,10 +123,10 @@ def get_ai_response(prompt, system_message):
                 return response.text, None
             elif active_api == "mistral" and mistral_client:
                 messages = [
-                    ChatMessage(role="system", content=system_message),
-                    ChatMessage(role="user", content=prompt)
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
                 ]
-                response = mistral_client.chat(
+                response = mistral_client.chat.complete(
                     model="mistral-large-latest",
                     messages=messages
                 )
