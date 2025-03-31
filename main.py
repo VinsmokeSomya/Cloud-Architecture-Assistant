@@ -1,13 +1,21 @@
-import os  # Importing the os module for environment variable access
 from openai import OpenAI  # Updated OpenAI import
 import google.generativeai as genai  # Importing the Google Generative AI client
 from mistralai.client import MistralClient  # Importing the Mistral API client
-from mistralai.models.chat_completion import ChatMessage  # Importing the ChatMessage model from Mistral
+
+# Try different Mistral import paths for compatibility
+try:
+    from mistralai.models.chat import ChatMessage
+except ImportError:
+    try:
+        from mistralai.models import ChatMessage
+    except ImportError:
+        from mistralai import ChatMessage
+
 from dotenv import load_dotenv  # Importing the dotenv module to load environment variables from a .env file
 from colorama import init, Fore, Style
 from datetime import datetime
 import time
-from mistralai.models.chat_completion import ChatMessage as MistralChatMessage  # Alternative import
+import os  # Add missing os import
 
 # Add new imports
 import json
@@ -110,7 +118,7 @@ def save_file(project_title, content, file_type):
 def generate_with_openai(prompt, system_message):
     """Generate response using OpenAI API"""
     response = openai_client.chat.completions.create(
-        model="gpt-4o-2024-11-20",
+        model="gpt-4-turbo-preview",
         messages=[
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt}
@@ -132,7 +140,7 @@ def generate_with_mistral(prompt, system_message):
     ]
     try:
         response = mistral_client.chat(
-            model="mistral-large-latest",
+            model="mistral-medium",
             messages=messages
         )
         return response.choices[0].message.content
@@ -170,11 +178,12 @@ def get_project_details():
 
 def get_next_question(project_details, previous_questions, previous_answers):
     """Generate the next relevant question based on previous context"""
+    qa_pairs = "\n".join(f"Q: {q}\nA: {a}\n" for q, a in zip(previous_questions, previous_answers))
     context = f"""Project Title: {project_details['title']}
 Description: {project_details['description']}
 
 Previous Questions and Answers:
-{chr(10).join(f"Q: {q}\nA: {a}\n" for q, a in zip(previous_questions, previous_answers))}
+{qa_pairs}
 
 Generate the next most relevant question to ask about the project's technical requirements for AWS cloud architecture.
 The question should be natural and conversational, as if you're a real architecture engineer having a discussion.
@@ -256,7 +265,7 @@ def get_ai_response(prompt, system_message):
         try:
             if active_api == "openai" and openai_client:
                 response = openai_client.chat.completions.create(
-                    model="gpt-4o-2024-11-20",
+                    model="gpt-4-turbo-preview",
                     messages=[
                         {"role": "system", "content": system_message},
                         {"role": "user", "content": prompt}
@@ -273,7 +282,7 @@ def get_ai_response(prompt, system_message):
                     ChatMessage(role="user", content=prompt)
                 ]
                 response = mistral_client.chat(
-                    model="mistral-large-latest",
+                    model="mistral-medium",
                     messages=messages
                 )
                 return response.choices[0].message.content, None
