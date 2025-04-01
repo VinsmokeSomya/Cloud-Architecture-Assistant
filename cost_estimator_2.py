@@ -4,6 +4,11 @@ import requests
 import datetime
 import logging
 from typing import Dict, Any, List, Optional, Union
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 class AWScostEstimator:
     """AWS Cost Estimation tool that takes an architecture JSON and provides pricing estimates."""
@@ -11,11 +16,46 @@ class AWScostEstimator:
     def __init__(self, region="ap-south-1"):
         """Initialize the AWS cost estimator with the specified region."""
         self.region = region
-        self.pricing_client = boto3.client('pricing', region_name='us-east-1')  # Pricing API only available in us-east-1
-        self.ec2_client = boto3.client('ec2', region_name=region)
-        self.rds_client = boto3.client('rds', region_name=region)
-        self.dynamodb_client = boto3.client('dynamodb', region_name=region)
-        self.s3_client = boto3.client('s3', region_name=region)
+        
+        # Configure AWS credentials from environment variables
+        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        aws_region = os.getenv('AWS_REGION', region)
+        
+        if not aws_access_key_id or not aws_secret_access_key:
+            raise ValueError("AWS credentials not found in environment variables. Please check your .env file.")
+        
+        # Initialize AWS clients with credentials
+        self.pricing_client = boto3.client(
+            'pricing',
+            region_name='us-east-1',  # Pricing API only available in us-east-1
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key
+        )
+        self.ec2_client = boto3.client(
+            'ec2',
+            region_name=aws_region,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key
+        )
+        self.rds_client = boto3.client(
+            'rds',
+            region_name=aws_region,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key
+        )
+        self.dynamodb_client = boto3.client(
+            'dynamodb',
+            region_name=aws_region,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key
+        )
+        self.s3_client = boto3.client(
+            's3',
+            region_name=aws_region,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key
+        )
         
         # Default values for services if not specified in the JSON
         self.defaults = {
