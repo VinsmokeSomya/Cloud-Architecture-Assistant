@@ -169,31 +169,33 @@ def get_project_details():
 
 def get_next_question(project_details, previous_questions, previous_answers):
     """Generate the next relevant question based on previous context"""
+    
+    qa_section = "\n".join(f"Q: {q}\nA: {a}" for q, a in zip(previous_questions, previous_answers))
+
     context = f"""Project Title: {project_details['title']}
-Description: {project_details['description']}
+    Description: {project_details['description']}
+    Previous Questions and Answers:
+    {qa_section}
 
-Previous Questions and Answers:
-{chr(10).join(f"Q: {q}\nA: {a}\n" for q, a in zip(previous_questions, previous_answers))}
+    Generate the next most relevant question to ask about the project's technical requirements for AWS cloud architecture.
+    The question should be natural and conversational, as if you're a real architecture engineer having a discussion.
+    Focus on gathering information about:
+    1. Expected user base and traffic
+    2. Data storage requirements
+    3. Security and compliance needs
+    4. Performance requirements
+    5. Budget constraints
+    6. Scalability needs
+    7. Integration requirements
+    8. Disaster recovery needs
+    9. Monitoring and maintenance preferences
+    10. Technical stack preferences
 
-Generate the next most relevant question to ask about the project's technical requirements for AWS cloud architecture.
-The question should be natural and conversational, as if you're a real architecture engineer having a discussion.
-Focus on gathering information about:
-1. Expected user base and traffic
-2. Data storage requirements
-3. Security and compliance needs
-4. Performance requirements
-5. Budget constraints
-6. Scalability needs
-7. Integration requirements
-8. Disaster recovery needs
-9. Monitoring and maintenance preferences
-10. Technical stack preferences
-
-Generate only ONE question, and make it sound natural and conversational."""
+    Generate only ONE question, and make it sound natural and conversational."""
 
     system_message = """You are an experienced cloud architecture engineer having a natural conversation with a client.
-Your goal is to gather technical requirements by asking one question at a time in a conversational manner.
-Make your questions sound natural and friendly, as if you're having a real discussion."""
+    Your goal is to gather technical requirements by asking one question at a time in a conversational manner.
+    Make your questions sound natural and friendly, as if you're having a real discussion."""
 
     return get_ai_response(context, system_message)
 
@@ -218,11 +220,13 @@ def get_user_response(question):
 
 def generate_architecture_prompt(project_details, questions, answers):
     """Generate the final architecture prompt based on all gathered information"""
-    context = f"""Project Title: {project_details['title']}
-Description: {project_details['description']}
+    qa_section = "\n".join(f"Q: {q}\nA: {a}" for q, a in zip(questions, answers))
 
-Full Requirements Discussion:
-{chr(10).join(f"Q: {q}\nA: {a}\n" for q, a in zip(questions, answers))}
+    context = f"""Project Title: {project_details['title']}
+    Description: {project_details['description']}
+
+    Full Requirements Discussion:
+    {qa_section}
 
 Generate a comprehensive AWS architecture prompt in a narrative format with single line breaks between paragraphs.
 The prompt should follow this structure but be written in a natural, conversational way:
@@ -315,11 +319,13 @@ def save_analysis_results(project_title: str, architecture_prompt: str, cost_est
 
 def analyze_requirements(project_details, questions, answers):
     """Analyze and display understanding of project requirements"""
-    context = f"""Project Title: {project_details['title']}
-Description: {project_details['description']}
+    qa_section = "\n".join(f"Q: {q}\nA: {a}" for q, a in zip(questions, answers))
 
-Full Requirements Discussion:
-{chr(10).join(f"Q: {q}\nA: {a}\n" for q, a in zip(questions, answers))}
+    context = f"""Project Title: {project_details['title']}
+    Description: {project_details['description']}
+
+    Full Requirements Discussion:
+    {qa_section}
 
 Based on the provided information, analyze and summarize your understanding of the project requirements.
 Focus on:
