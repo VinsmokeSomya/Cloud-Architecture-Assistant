@@ -1,7 +1,15 @@
 import json
 import boto3
+from dotenv import load_dotenv 
+import os
 
-def create_pricing_client(access_key, secret_key, region="us-east-1"):
+load_dotenv()
+
+def create_pricing_client(region="us-east-1"):
+ 
+    access_key = os.environ.get("AWS_ACCESS_KEY")
+    secret_key = os.environ.get("AWS_SECRET_KEY")
+
     session = boto3.Session(
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
@@ -30,8 +38,11 @@ def get_price(pricing_client, filters, service_code="AmazonEC2"):
         return 0.0
 
 
-def estimate_cost(architecture_json, access_key, secret_key):
-    pricing_client = create_pricing_client(access_key, secret_key)
+def estimate_cost(architecture_json):
+    access_key = os.environ.get("AWS_ACCESS_KEY")
+    secret_key = os.environ.get("AWS_SECRET_KEY")
+
+    pricing_client = create_pricing_client()
     total_hourly = 0.0
     breakdown = []
 
@@ -92,9 +103,8 @@ def estimate_cost(architecture_json, access_key, secret_key):
 
 # Example usage:
 if __name__ == "__main__":
-    # Paste your keys here for testing
-    AWS_ACCESS_KEY = ""
-    AWS_SECRET_KEY = ""
+
+
 
     architecture_input = {
         "resources": [
@@ -105,5 +115,5 @@ if __name__ == "__main__":
         ]
     }
 
-    result = estimate_cost(architecture_input, AWS_ACCESS_KEY, AWS_SECRET_KEY)
+    result = estimate_cost(architecture_input)
     print(json.dumps(result, indent=2))
