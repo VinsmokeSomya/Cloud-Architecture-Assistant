@@ -93,8 +93,8 @@ def estimate_cost(architecture_json, access_key, secret_key):
 # Example usage:
 if __name__ == "__main__":
     # Paste your keys here for testing
-    AWS_ACCESS_KEY = "AKIATVFZIUBAZ5ZUNDNP"
-    AWS_SECRET_KEY = "CH1zSq1iuur6IsdDA0pcEgYKZcJYuHaWB10xckVC"
+    AWS_ACCESS_KEY = ""
+    AWS_SECRET_KEY = ""
 
     architecture_input = {
         "resources": [
