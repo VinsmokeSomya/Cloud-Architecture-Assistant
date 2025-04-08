@@ -30,7 +30,7 @@ def prompt_region():
         inquirer.List('region',
                   message="Select and AWS Region?",  # Prompt message
                   choices=regions,  # Available regions
-                  default='eu-central-1',  # Default selection
+                  default='ap-south-1',  # Default selection
                   carousel=True,  # Enable scrolling
               )
     ]
@@ -87,10 +87,28 @@ def get_options_list(options_list, service_offer):
     return return_options  # Return list of options
 
 def get_product_label(x):
-    if x['attributes'] and x['attributes']['servicecode'] == 'AmazonEC2':  # If EC2 instance
-        return f"{x['attributes']['instanceFamily']} - {x['attributes']['instanceType']} - {x['attributes']['operatingSystem']} - vcpu={x['attributes']['vcpu']} - {x['attributes']['tenancy']} - {x['attributes']['preInstalledSw']} - {x['attributes']['capacitystatus']}"  # Format EC2 label
+    if not x.get('attributes'):
+        return x.get('name', 'Unknown Product')
+        
+    service_code = x['attributes'].get('servicecode', '')
+    product_family = x['attributes'].get('productFamily', '')
+    
+    if service_code == 'AmazonEC2' and product_family == 'Compute Instance':
+        # Format EC2 instance label
+        return f"{x['attributes'].get('instanceFamily', '')} - {x['attributes'].get('instanceType', '')} - {x['attributes'].get('operatingSystem', '')} - vcpu={x['attributes'].get('vcpu', '')} - {x['attributes'].get('tenancy', '')} - {x['attributes'].get('preInstalledSw', '')} - {x['attributes'].get('capacitystatus', '')}"
+    elif service_code == 'AWSELB' or 'Load Balancer' in product_family:
+        # Format Load Balancer label
+        return f"{x['attributes'].get('loadBalancerType', 'Load Balancer')} - {x['attributes'].get('group', '')} - {x['attributes'].get('operation', '')}"
     else:
-        return x['name']  # Return simple name for other services
+        # For other services, return a combination of relevant attributes
+        label_parts = []
+        for attr in ['instanceType', 'volumeType', 'databaseEngine', 'deploymentOption']:
+            if attr in x['attributes']:
+                label_parts.append(f"{attr}={x['attributes'][attr]}")
+        
+        if label_parts:
+            return f"{product_family} - {' - '.join(label_parts)}"
+        return x.get('name', 'Unknown Product')
 
 def prompt_service_form(service_offer, service):
     terms = service_offer.get('terms', {})  # Get pricing terms

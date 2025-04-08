@@ -108,6 +108,7 @@ def get_ai_response(prompt, system_message):
     """Get response from the active AI model"""
     try:
         if active_api == "openai" and openai_client:
+            print_colored(f"\nUsing OpenAI GPT-4 model", Fore.CYAN)
             response = openai_client.chat.completions.create(
                 model="gpt-4o-2024-11-20",
                 messages=[
@@ -117,10 +118,12 @@ def get_ai_response(prompt, system_message):
             )
             return response.choices[0].message.content
         elif active_api == "gemini" and gemini_model:
+            print_colored(f"\nUsing Google Gemini Pro model", Fore.CYAN)
             full_prompt = f"{system_message}\n\n{prompt}"
             response = gemini_model.generate_content(full_prompt)
             return response.text
         elif active_api == "mistral" and mistral_client:
+            print_colored(f"\nUsing Mistral Large model", Fore.CYAN)
             messages = [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt}
