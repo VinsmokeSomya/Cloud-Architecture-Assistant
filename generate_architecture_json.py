@@ -4,7 +4,7 @@ import re
 from openai import OpenAI
 import google.generativeai as genai
 from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
+#from mistralai.models.chat_completion import ChatMessage
 from dotenv import load_dotenv
 from colorama import init, Fore, Style
 from datetime import datetime
@@ -89,21 +89,21 @@ def generate_with_gemini(prompt, system_message):
     response = gemini_model.generate_content(full_prompt)
     return response.text
 
-def generate_with_mistral(prompt, system_message):
-    """Generate response using Mistral API"""
-    messages = [
-        ChatMessage(role="system", content=system_message),
-        ChatMessage(role="user", content=prompt)
-    ]
-    try:
-        response = mistral_client.chat(
-            model="mistral-tiny",
-            messages=messages
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print_error(f"Mistral API error: {str(e)}")
-        raise
+#def generate_with_mistral(prompt, system_message):
+#    """Generate response using Mistral API"""
+#   messages = [
+#        ChatMessage(role="system", content=system_message),
+#        ChatMessage(role="user", content=prompt)
+#    ]
+#    try:
+#        response = mistral_client.chat(
+#            model="mistral-tiny",
+#            messages=messages
+#        )
+#        return response.choices[0].message.content
+#    except Exception as e:
+#        print_error(f"Mistral API error: {str(e)}")
+#        raise
 
 def get_ai_response(prompt, system_message):
     """Get response from the active AI model"""
@@ -112,8 +112,8 @@ def get_ai_response(prompt, system_message):
             return generate_with_openai(prompt, system_message)
         elif active_api == "gemini" and gemini_model:
             return generate_with_gemini(prompt, system_message)
-        elif active_api == "mistral" and mistral_client:
-            return generate_with_mistral(prompt, system_message)
+        #elif active_api == "mistral" and mistral_client:
+         #   return generate_with_mistral(prompt, system_message)
         else:
             raise Exception("No valid API clients available. Please check your API keys and try again.")
     except Exception as e:
