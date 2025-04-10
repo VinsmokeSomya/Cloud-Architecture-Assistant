@@ -1,104 +1,61 @@
-# Cloud Architecture Design Assistant
+# Cloud Architecture Assistant - Streamlit Interface
 
-An intelligent assistant that helps design AWS cloud architectures through natural conversation. The assistant uses various AI models (OpenAI, Google Gemini, or Mistral) to understand project requirements and generate detailed AWS architecture specifications. Features a user-friendly Gradio web interface for interactive sessions.
+This Streamlit app provides a web interface for the Cloud Architecture Assistant, helping users design AWS cloud architectures with AI assistance.
 
 ## Features
 
-- Interactive web interface powered by Gradio
-- Natural conversation interface for gathering project requirements
-- Support for multiple AI models (OpenAI, Google Gemini, Mistral)
-- Automatic fallback between different AI providers
-- Real-time requirements analysis and confirmation
-- Security assessment generation
-- Architecture prompt generation
-- Structured AWS architecture JSON generation
-- Automatic file saving with timestamps
-- Collapsible sections for better organization
-- Copy-to-clipboard functionality for outputs
-
-## Prerequisites
-
-- Python 3.8 or higher
-- API keys for at least one of the following:
-  - OpenAI API key
-  - Google Gemini API key
-  - Mistral API key
+- Interactive web interface for designing cloud architectures
+- Multi-step process: project details → requirements collection → architecture generation → security assessment
+- Support for OpenAI, Google Gemini, and Mistral AI models
+- Security scoring and compliance recommendations
+- Export options for all generated content
 
 ## Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/cloud-architecture-assistant.git
-cd cloud-architecture-assistant
-```
+1. Install the required packages:
 
-2. Install required packages:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file in the root directory with your API keys:
+2. Set up your API keys:
+   - Create a `.env` file in the project root
+   - Add your API keys (at least one is required):
+   
 ```
-OPENAI_API_KEY=your_openai_api_key
-GEMINI_API_KEY=your_gemini_api_key
-MISTRAL_API_KEY=your_mistral_api_key
+OPENAI_API_KEY=your_openai_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+MISTRAL_API_KEY=your_mistral_api_key_here
 ```
+
+## Running the App
+
+Start the Streamlit app with:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+This will launch the web interface in your default browser.
 
 ## Usage
 
-### Web Interface (Recommended)
+1. **Select AI Provider**: Choose between OpenAI, Google Gemini, or Mistral AI in the sidebar.
+2. **Project Details**: Enter your project title and description.
+3. **Requirements Collection**: Answer questions about your project requirements.
+4. **Review Analysis**: Review the AI's understanding of your requirements.
+5. **Architecture Generation**: Generate AWS cloud architecture designs.
+6. **Security Assessment**: Get security recommendations and compliance information.
+7. **Export Results**: Download the generated files.
 
-Launch the Gradio web interface:
-```bash
-python gradio_interface.py
-```
+## File Structure
 
-The interface provides:
-1. Project setup with title and description
-2. Interactive Q&A session
-3. Real-time requirements analysis
-4. Security assessment
-5. Architecture generation
-6. JSON architecture generation
+- `main.py`: Original CLI interface for the Cloud Architecture Assistant
+- `streamlit_app.py`: Streamlit web interface for the Assistant
+- `requirements.txt`: Required Python packages
 
-### Command Line Interface
+## Notes
 
-Alternatively, you can use the command-line interface:
-
-1. Generate Architecture Design:
-```bash
-python main.py
-```
-
-2. Generate Architecture JSON:
-```bash
-python generate_architecture_json.py
-```
-
-## Project Structure
-
-- `gradio_interface.py`: Main web interface using Gradio
-- `main.py`: Command-line interface for architecture design
-- `generate_architecture_json.py`: JSON architecture generator
-- `templet_arch.json`: Template for architecture JSON structure
-- `API Test/`: Directory containing API test scripts
-  - `openai-api-test.py`: Test script for OpenAI API
-  - `gemini-api-test.py`: Test script for Google Gemini API
-  - `mistral-api-test.py`: Test script for Mistral API
-- `requirements.txt`: List of Python dependencies
-
-## Output Files
-
-The assistant generates several types of files in project-specific folders:
-1. `[ProjectName]_Conversation_[Timestamp].txt`: Full conversation history
-2. `[ProjectName]_Architecture_[Timestamp].txt`: AWS architecture specification
-3. `[ProjectName]_SecurityAssessment_[Timestamp].txt`: Security assessment details
-4. `[ProjectName]_ArchitectureJSON_[Timestamp].json`: Structured AWS architecture
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
+- You must have at least one valid API key to use the application.
+- Files are saved locally in a folder named after your project.
+- The number of questions varies based on your project's complexity. 
