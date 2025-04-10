@@ -1,15 +1,20 @@
 # Cloud Architecture Design Assistant
 
-An intelligent assistant that helps design AWS cloud architectures through natural conversation. The assistant uses various AI models (OpenAI, Google Gemini, or Mistral) to understand project requirements and generate detailed AWS architecture specifications.
+An intelligent assistant that helps design AWS cloud architectures through natural conversation. The assistant uses various AI models (OpenAI, Google Gemini, or Mistral) to understand project requirements and generate detailed AWS architecture specifications. Features a user-friendly Gradio web interface for interactive sessions.
 
 ## Features
 
+- Interactive web interface powered by Gradio
 - Natural conversation interface for gathering project requirements
 - Support for multiple AI models (OpenAI, Google Gemini, Mistral)
 - Automatic fallback between different AI providers
-- Generates detailed AWS architecture specifications
-- Saves conversation history and architecture prompts
-- Colored console output for better readability
+- Real-time requirements analysis and confirmation
+- Security assessment generation
+- Architecture prompt generation
+- Structured AWS architecture JSON generation
+- Automatic file saving with timestamps
+- Collapsible sections for better organization
+- Copy-to-clipboard functionality for outputs
 
 ## Prerequisites
 
@@ -41,18 +46,41 @@ MISTRAL_API_KEY=your_mistral_api_key
 
 ## Usage
 
-1. Run the main script:
+### Web Interface (Recommended)
+
+Launch the Gradio web interface:
+```bash
+python gradio_interface.py
+```
+
+The interface provides:
+1. Project setup with title and description
+2. Interactive Q&A session
+3. Real-time requirements analysis
+4. Security assessment
+5. Architecture generation
+6. JSON architecture generation
+
+### Command Line Interface
+
+Alternatively, you can use the command-line interface:
+
+1. Generate Architecture Design:
 ```bash
 python main.py
 ```
 
-2. Follow the interactive prompts to provide project details
-3. The assistant will ask relevant questions about your project requirements
-4. After gathering all information, it will generate a detailed AWS architecture specification
+2. Generate Architecture JSON:
+```bash
+python generate_architecture_json.py
+```
 
 ## Project Structure
 
-- `main.py`: Main application script
+- `gradio_interface.py`: Main web interface using Gradio
+- `main.py`: Command-line interface for architecture design
+- `generate_architecture_json.py`: JSON architecture generator
+- `templet_arch.json`: Template for architecture JSON structure
 - `API Test/`: Directory containing API test scripts
   - `openai-api-test.py`: Test script for OpenAI API
   - `gemini-api-test.py`: Test script for Google Gemini API
@@ -61,9 +89,11 @@ python main.py
 
 ## Output Files
 
-The assistant generates two types of files:
-1. `[ProjectName]_Communication_[Timestamp].txt`: Contains the full conversation history
-2. `[ProjectName]_Architecture_[Timestamp].txt`: Contains the generated AWS architecture specification
+The assistant generates several types of files in project-specific folders:
+1. `[ProjectName]_Conversation_[Timestamp].txt`: Full conversation history
+2. `[ProjectName]_Architecture_[Timestamp].txt`: AWS architecture specification
+3. `[ProjectName]_SecurityAssessment_[Timestamp].txt`: Security assessment details
+4. `[ProjectName]_ArchitectureJSON_[Timestamp].json`: Structured AWS architecture
 
 ## Contributing
 

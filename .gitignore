@@ -35,4 +35,23 @@ ENV/
 
 # Project specific
 *.txt
-!requirements.txt 
+!requirements.txt
+*.json
+!templet_arch.json
+
+# Gradio
+flagged/
+gradio_cached_examples/
+*.db
+logs/
+
+# Generated files
+*_Architecture_*/
+*_Communication_*/
+*_Conversation_*/
+*_SecurityAssessment_*/
+*_ArchitectureJSON_*/
+
+# OS specific
+.DS_Store
+Thumbs.db 

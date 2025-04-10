@@ -19,7 +19,7 @@ def test_openai_api():
         # Test the API with a simple prompt
         print("\nTesting API with a simple prompt...")
         response = openai.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model="gpt-4o-2024-11-20",
             messages=[
                 {"role": "user", "content": "Yo!, this is a test message."}
             ]

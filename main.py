@@ -1,18 +1,16 @@
 import os  # Importing the os module for environment variable access
 from openai import OpenAI  # Updated OpenAI import
 import google.generativeai as genai  # Importing the Google Generative AI client
-from mistralai.client import MistralClient  # Importing the Mistral API client
-from mistralai.models.chat_completion import ChatMessage  # Importing the ChatMessage model from Mistral
+from mistralai import Mistral  # Updated Mistral import
 from dotenv import load_dotenv  # Importing the dotenv module to load environment variables from a .env file
 from colorama import init, Fore, Style
 from datetime import datetime
 import time
-from mistralai.models.chat_completion import ChatMessage as MistralChatMessage  # Alternative import
 
 # Add new imports
 import json
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 # Initialize colorama
 init()
@@ -72,7 +70,7 @@ if is_valid_api_key(OPENAI_API_KEY):
 elif is_valid_api_key(GEMINI_API_KEY):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
+        gemini_model = genai.GenerativeModel('models/gemini-2.0-pro-exp')
         active_api = "gemini"
     except Exception as e:
         print_error(f"Error initializing Gemini: {str(e)}")
@@ -80,27 +78,37 @@ elif is_valid_api_key(GEMINI_API_KEY):
 # Initialize Mistral if neither OpenAI nor Gemini are available
 elif is_valid_api_key(MISTRAL_API_KEY):
     try:
-        mistral_client = MistralClient(api_key=MISTRAL_API_KEY)
+        mistral_client = Mistral(api_key=MISTRAL_API_KEY)
         active_api = "mistral"
     except Exception as e:
         print_error(f"Error initializing Mistral: {str(e)}")
 
 def save_file(project_title, content, file_type):
     """Save content to a file with project title and timestamp"""
-    # Create a filename from the project title (remove special characters)
+    # Create a safe folder name from the project title (remove special characters)
     safe_title = "".join(c for c in project_title if c.isalnum() or c in (' ', '-', '_')).strip()
+    
+    # Create project folder if it doesn't exist
+    project_folder = safe_title
+    if not os.path.exists(project_folder):
+        os.makedirs(project_folder)
+    
+    # Create filename with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"{safe_title}_{file_type}_{timestamp}.txt"
     
-    with open(filename, "w", encoding='utf-8') as f:
+    # Full path including project folder
+    filepath = os.path.join(project_folder, filename)
+    
+    with open(filepath, "w", encoding='utf-8') as f:
         f.write(content)
     
-    return filename
+    return filepath  # Return the full filepath
 
 def generate_with_openai(prompt, system_message):
     """Generate response using OpenAI API"""
     response = openai_client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-2024-11-20",
         messages=[
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt}
@@ -117,12 +125,12 @@ def generate_with_gemini(prompt, system_message):
 def generate_with_mistral(prompt, system_message):
     """Generate response using Mistral API"""
     messages = [
-        ChatMessage(role="system", content=system_message),
-        ChatMessage(role="user", content=prompt)
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": prompt}
     ]
     try:
-        response = mistral_client.chat(
-            model="mistral-tiny",
+        response = mistral_client.chat.complete(
+            model="mistral-large-latest",
             messages=messages
         )
         return response.choices[0].message.content
@@ -133,11 +141,11 @@ def generate_with_mistral(prompt, system_message):
 def get_active_model():
     """Get the active model that will be used for responses"""
     if active_api == "openai":
-        return "OpenAI GPT-3.5"
+        return "OpenAI ChatGPT"
     elif active_api == "gemini":
         return "Google Gemini"
     elif active_api == "mistral":
-        return "Mistral AI (Mixtral-8x7B)"
+        return "Mistral AI"
     return None
 
 def get_project_details():
@@ -239,57 +247,44 @@ Use single line breaks between paragraphs for better formatting."""
     return get_ai_response(context, system_message)
 
 def get_ai_response(prompt, system_message):
-    """Get response from the active AI model"""
-    try:
-        if active_api == "openai" and openai_client:
-            return generate_with_openai(prompt, system_message)
-        elif active_api == "gemini" and gemini_model:
-            return generate_with_gemini(prompt, system_message)
-        elif active_api == "mistral" and mistral_client:
-            return generate_with_mistral(prompt, system_message)
-        else:
-            raise Exception("No valid API clients available. Please check your API keys and try again.")
-    except Exception as e:
-        print_error(f"Error getting AI response: {str(e)}")
+    """Get response from the active AI model with fallback mechanisms"""
+    global active_api
+    
+    def try_api_call():
+        try:
+            if active_api == "openai" and openai_client:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o-2024-11-20",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                return response.choices[0].message.content, None
+            elif active_api == "gemini" and gemini_model:
+                full_prompt = f"{system_message}\n\n{prompt}"
+                response = gemini_model.generate_content(full_prompt)
+                return response.text, None
+            elif active_api == "mistral" and mistral_client:
+                messages = [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ]
+                response = mistral_client.chat.complete(
+                    model="mistral-large-latest",
+                    messages=messages
+                )
+                return response.choices[0].message.content, None
+            return None, "No valid API clients available"
+        except Exception as e:
+            return None, str(e)
+
+    response, error = try_api_call()
+    if response:
+        return response
+    else:
+        print_error(f"Error getting AI response: {error}")
         raise
-
-def generate_cost_estimate(architecture_prompt: str) -> Dict:
-    """Generate cost estimate for the proposed architecture"""
-    context = f"""Based on the following AWS architecture, provide a detailed cost estimate:
-{architecture_prompt}
-
-Generate a JSON response with the following structure:
-{{
-    "monthly_estimate": {{
-        "total_cost": float,
-        "breakdown": {{
-            "compute": float,
-            "storage": float,
-            "network": float,
-            "other": float
-        }},
-        "cost_optimization_suggestions": [string]
-    }},
-    "annual_estimate": {{
-        "total_cost": float,
-        "potential_savings": float,
-        "savings_strategies": [string]
-    }}
-}}"""
-
-    system_message = """You are an AWS cost optimization expert. Provide detailed cost estimates and optimization suggestions.
-Include specific AWS service costs and potential savings strategies."""
-
-    try:
-        response = get_ai_response(context, system_message)
-        # Extract JSON from response
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        return None
-    except Exception as e:
-        print_error(f"Error generating cost estimate: {str(e)}")
-        return None
 
 def generate_security_assessment(architecture_prompt: str) -> Dict:
     """Generate security assessment for the proposed architecture"""
@@ -323,17 +318,12 @@ Focus on AWS security best practices and compliance requirements."""
         print_error(f"Error generating security assessment: {str(e)}")
         return None
 
-def save_analysis_results(project_title: str, architecture_prompt: str, cost_estimate: Optional[Dict], security_assessment: Optional[Dict]):
+def save_analysis_results(project_title: str, architecture_prompt: str, security_assessment: Optional[Dict]):
     """Save all analysis results to files"""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
     # Save architecture
     architecture_filename = save_file(project_title, architecture_prompt, "Architecture")
-    
-    # Save cost estimate
-    if cost_estimate:
-        cost_filename = save_file(project_title, json.dumps(cost_estimate, indent=2), "CostEstimate")
-        print_info(f"Cost estimate has been saved to '{cost_filename}'")
     
     # Save security assessment
     if security_assessment:
@@ -542,30 +532,22 @@ def main():
         time.sleep(1)
         architecture_prompt = generate_architecture_prompt(project_details, questions, answers)
         
-        # Generate cost estimate
-        print_info("\nGenerating cost estimate...")
-        time.sleep(1)
-        cost_estimate = generate_cost_estimate(architecture_prompt)
-        
         # Generate security assessment
         print_info("\nPerforming security assessment...")
         time.sleep(1)
         security_assessment = generate_security_assessment(architecture_prompt)
         
         # Save all results
-        architecture_filename = save_analysis_results(project_details['title'], architecture_prompt, cost_estimate, security_assessment)
+        architecture_filename = save_analysis_results(project_details['title'], architecture_prompt, security_assessment)
         
         # Save conversation
         conversation_filename = save_file(project_details['title'], "\n".join(conversation), "Conversation")
         
         # Final success messages
         print_success("\nGreat! I've generated a comprehensive analysis of your cloud architecture.")
-        print_info(f"The complete conversation has been saved to '{conversation_filename}'")
-        print_info(f"The architecture has been saved to '{architecture_filename}'")
-        
-        if cost_estimate:
-            print_info(f"Monthly estimated cost: ${cost_estimate['monthly_estimate']['total_cost']:.2f}")
-            print_info("Check the cost estimate file for detailed breakdown and optimization suggestions.")
+        print_info(f"All files have been saved in the '{project_details['title']}' folder:")
+        print_info(f"- Conversation: {os.path.basename(conversation_filename)}")
+        print_info(f"- Architecture: {os.path.basename(architecture_filename)}")
         
         if security_assessment:
             print_info(f"Security score: {security_assessment['security_score']}/100")
