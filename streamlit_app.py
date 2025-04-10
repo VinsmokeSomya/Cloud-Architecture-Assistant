@@ -254,6 +254,232 @@ Focus on AWS security best practices and compliance requirements."""
         st.error(f"Error generating security assessment: {str(e)}")
         return None
 
+def generate_architecture_json(architecture_prompt):
+    """Generate architecture JSON based on prompt and template"""
+    # Define a fallback template in case file is missing
+    fallback_template = {
+    "title": "Cost_Estimation_Ready_Architecture",
+    "nodes": [
+      {
+        "id": "webAppServer",
+        "type": "AmazonEC2",
+        "label": "Web Server",
+        "region": "Asia Pacific (Mumbai)",
+        "attributes": {
+          "instanceType": "t3.micro",
+          "operatingSystem": "Linux",
+          "tenancy": "Shared",
+          "capacitystatus": "Used",
+          "preInstalledSw": "NA",
+          "termType": "OnDemand",
+          "storageGB": 15,
+          "volumeType": "gp3"
+
+        }
+      },
+      {
+        "id": "database",
+        "type": "AmazonRDS",
+        "label": "RDS Database",
+        "region": "Asia Pacific (Mumbai)",
+        "attributes": {
+          "instanceType": "db.t3.micro",
+          "databaseEngine": "PostgreSQL",
+          "termType": "OnDemand",
+          "storageGB": 100,
+          "storageType": "gp3"
+        }
+      },
+      {
+        "id": "storageBucket",
+        "type": "AmazonS3",
+        "label": "S3 Bucket",
+        "region": "Asia Pacific (Mumbai)",
+        "attributes": {
+          "storageGB": 100,
+          "storageClass": "Standard",
+          "numPUTRequests": 10000,
+          "numGETRequests": 50000
+        }
+      },
+      {
+        "id": "cloudfrontCDN",
+        "type": "AmazonCloudFront",
+        "label": "CloudFront CDN",
+        "region": "Global",
+        "attributes": {
+          "dataOutGB": 100
+        }
+      },
+    {
+        "id": "lambdaFunction",
+        "type": "AWSLambda",
+        "label": "Lambda Function",
+        "region": "Asia Pacific (Mumbai)",
+        "attributes": {
+          "requestsPerMonth": 10000000,
+          "durationMs": 100,
+          "memorySizeMB": 128
+        }
+      },
+      {
+        "id": "iamRole",
+        "type": "AWSIAM",
+        "label": "IAM Role",
+        "region": "Global",
+        "attributes": {
+          "userCount": 5,
+          "policyType": "Managed"
+        }
+      }
+    ],
+    "edges": [
+      { "from": "cloudfrontCDN", "to": "storageBucket" },
+      { "from": "webAppServer", "to": "database" },
+      { "from": "webAppServer", "to": "lambdaFunction" },
+      { "from": "lambdaFunction", "to": "database" },
+      { "from": "iamRole", "to": "webAppServer" },
+      { "from": "iamRole", "to": "lambdaFunction" }
+    ]
+}
+    
+    # Load the template JSON with better error handling
+    template_path = "templet_arch.json"
+    template_json = None
+    try:
+        if os.path.exists(template_path):
+            with open(template_path, 'r') as f:
+                template_json = json.load(f)
+        else:
+            st.warning(f"Template file '{template_path}' not found. Using fallback template.")
+            template_json = fallback_template
+    except Exception as e:
+        st.warning(f"Error loading template JSON: {str(e)}. Using fallback template.")
+        template_json = fallback_template
+
+    context = f"""Based on the following AWS architecture requirements:
+{architecture_prompt}
+
+Considering these requirements, please generate an AWS architecture in JSON format, structured similarly to this example:
+{json.dumps(template_json, indent=2)}
+
+Ensure the architecture is optimized for low latency, high availability, and cost efficiency.
+Generate a valid JSON structure that can be parsed without errors."""
+
+    system_message = """You are an AWS architecture expert. Generate a detailed architecture JSON that follows the provided template structure.
+Include all necessary AWS services, their configurations, and interconnections.
+Focus on creating a well-optimized, secure, and scalable architecture.
+Ensure your response can be parsed as valid JSON."""
+
+    try:
+        # Check if AI client is configured
+        if not st.session_state.ai_client:
+            st.error("No AI client configured. Please set up your API key in the sidebar.")
+            return None
+            
+        # Use the session state client properly
+        response, error = get_ai_response(st.session_state.ai_client, context, system_message)
+        
+        if error:
+            st.error(f"Error from AI service: {error}")
+            return None
+            
+        if not response:
+            st.error("Empty response from AI service")
+            return None
+
+        # Extract JSON from response
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError as e:
+                st.error(f"Could not parse the generated JSON: {str(e)}")
+                st.code(response)  # Show the problematic response for debugging
+                return None
+        else:
+            st.error("No JSON structure found in the response.")
+            st.code(response)  # Show the problematic response for debugging
+            return None
+    except Exception as e:
+        st.error(f"Error generating architecture JSON: {str(e)}")
+        return None
+
+def confirm_architecture_json():
+    """Move from JSON architecture to download page"""
+    st.session_state.step = 'download'
+    st.session_state.needs_rerun = True
+
+def go_back_to_results():
+    """Go back to the results page"""
+    st.session_state.step = 'results'
+    st.session_state.needs_rerun = True
+
+def generate_json_architecture():
+    """Generate JSON architecture from the prompt"""
+    try:
+        with st.spinner("Generating JSON architecture..."):
+            st.session_state.architecture_json = generate_architecture_json(
+                st.session_state.architecture_prompt
+            )
+            
+            # Add debug info
+            if not st.session_state.architecture_json:
+                st.error("Failed to generate JSON architecture. Please check your AI API key or try again.")
+                return
+        
+        # Save the JSON architecture file
+        project_title = st.session_state.project_details.get('title', 'Architecture')
+        safe_title = "".join(c for c in project_title if c.isalnum() or c in (' ', '-', '_')).strip()
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{safe_title}_Architecture_{timestamp}.json"
+        
+        # Create directory if it doesn't exist
+        os.makedirs(safe_title, exist_ok=True)
+        filepath = os.path.join(safe_title, filename)
+        
+        with open(filepath, 'w') as f:
+            json.dump(st.session_state.architecture_json, f, indent=4)
+        
+        # Store the filepath
+        st.session_state.files_saved['json_architecture'] = filepath
+        
+        # Move to download page
+        st.session_state.step = 'json_architecture'
+        st.session_state.needs_rerun = True
+            
+    except Exception as e:
+        st.error(f"An error occurred during JSON architecture generation: {str(e)}")
+        st.info("You can try again or check your API key settings.")
+
+def save_all_results():
+    """Save all results to files"""
+    with st.spinner("Saving your results..."):
+        project_title = st.session_state.project_details.get('title', 'Architecture')
+        safe_title = "".join(c for c in project_title if c.isalnum() or c in (' ', '-', '_')).strip()
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Create directory if it doesn't exist
+        os.makedirs(safe_title, exist_ok=True)
+        
+        # Save architecture prompt
+        arch_filename = f"{safe_title}_Requirements_{timestamp}.txt"
+        arch_filepath = os.path.join(safe_title, arch_filename)
+        with open(arch_filepath, 'w') as f:
+            f.write(st.session_state.architecture_prompt)
+        st.session_state.files_saved['architecture'] = arch_filepath
+        
+        # Save security assessment if available
+        if st.session_state.security_assessment:
+            sec_filename = f"{safe_title}_Security_{timestamp}.json"
+            sec_filepath = os.path.join(safe_title, sec_filename)
+            with open(sec_filepath, 'w') as f:
+                json.dump(st.session_state.security_assessment, f, indent=4)
+            st.session_state.files_saved['security'] = sec_filepath
+        
+        # Move to architecture JSON generation
+        generate_json_architecture()
+
 # Initialize Streamlit session state
 if 'step' not in st.session_state:
     st.session_state.step = 'init'
@@ -275,6 +501,8 @@ if 'architecture_prompt' not in st.session_state:
     st.session_state.architecture_prompt = None
 if 'security_assessment' not in st.session_state:
     st.session_state.security_assessment = None
+if 'architecture_json' not in st.session_state:
+    st.session_state.architecture_json = None
 if 'files_saved' not in st.session_state:
     st.session_state.files_saved = {}
 
@@ -393,40 +621,6 @@ def generate_final_outputs():
     except Exception as e:
         st.error(f"An error occurred during architecture generation: {str(e)}")
         st.info("You can try again or check your API key settings.")
-
-def save_all_results():
-    """Save all results to files"""
-    files = {}
-    
-    # Save conversation
-    conversation = []
-    conversation.append(f"Project: {st.session_state.project_details['title']}")
-    conversation.append(f"Description: {st.session_state.project_details['description']}")
-    conversation.append("\nRequirements Collection:")
-    
-    for q, a in zip(st.session_state.questions, st.session_state.answers):
-        conversation.append(f"\nQ: {q}")
-        conversation.append(f"A: {a}")
-    
-    conversation_text = "\n".join(conversation)
-    conversation_file = save_file(st.session_state.project_details['title'], conversation_text, "Conversation")
-    files['conversation'] = conversation_file
-    
-    # Save architecture
-    architecture_file = save_file(st.session_state.project_details['title'], st.session_state.architecture_prompt, "Architecture")
-    files['architecture'] = architecture_file
-    
-    # Save security assessment
-    if st.session_state.security_assessment:
-        security_file = save_file(
-            st.session_state.project_details['title'], 
-            json.dumps(st.session_state.security_assessment, indent=2), 
-            "SecurityAssessment"
-        )
-        files['security'] = security_file
-    
-    st.session_state.files_saved = files
-    st.session_state.step = 'download'
 
 # Sidebar for LLM selection
 st.sidebar.title("☁️ Cloud Architecture Assistant")
@@ -813,6 +1007,52 @@ elif st.session_state.step == 'results':
     
     # Save results button with on_click callback
     st.button("Save Results", on_click=save_all_results)
+
+elif st.session_state.step == 'json_architecture':
+    # JSON Architecture page
+    st.title("AWS Architecture JSON")
+    
+    st.write("Your cloud architecture has been successfully converted to a structured JSON format, which can be used with infrastructure-as-code tools or visualization systems.")
+    
+    # Display the JSON
+    if st.session_state.architecture_json:
+        st.subheader("Architecture JSON")
+        with st.expander("View JSON", expanded=True):
+            st.json(st.session_state.architecture_json)
+        
+        # Show service count summary
+        if "nodes" in st.session_state.architecture_json:
+            services = {}
+            for node in st.session_state.architecture_json["nodes"]:
+                service = node.get("service", "Unknown")
+                if service in services:
+                    services[service] += 1
+                else:
+                    services[service] = 1
+            
+            st.subheader("Services Summary")
+            for service, count in services.items():
+                st.write(f"• {service}: {count} instance{'s' if count > 1 else ''}")
+    
+    # Options to continue
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        st.button("⬅️ Back to Results", on_click=go_back_to_results)
+    with col2:
+        st.button("✅ Continue to Download", on_click=confirm_architecture_json)
+    with col3:
+        # Download JSON directly from this page
+        if 'json_architecture' in st.session_state.files_saved:
+            with open(st.session_state.files_saved['json_architecture'], 'r') as f:
+                json_content = f.read()
+            
+            filename = os.path.basename(st.session_state.files_saved['json_architecture'])
+            st.download_button(
+                label="💾 Download JSON",
+                data=json_content,
+                file_name=filename,
+                mime="application/json"
+            )
 
 elif st.session_state.step == 'download':
     # Download page
