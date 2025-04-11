@@ -38,6 +38,7 @@ ENV/
 !requirements.txt
 *.json
 !templet_arch.json
+!pricing_api_data.json
 
 # Gradio
 flagged/
